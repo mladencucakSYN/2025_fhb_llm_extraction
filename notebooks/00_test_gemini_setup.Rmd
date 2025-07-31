@@ -83,6 +83,12 @@ simple_gemini <- function(message, api_key = Sys.getenv("GOOGLE_API_KEY")) {
 ## 4. Test the Function
 
 ```{r test-gemini}
+# Load ellmer library
+if (!requireNamespace("ellmer", quietly = TRUE)) {
+  install.packages("ellmer", repos = "https://cran.rstudio.com")
+}
+library(ellmer)
+
 # Only run test if API key is set
 if (api_key_set) {
   cat("Testing Gemini API...\n\n")
