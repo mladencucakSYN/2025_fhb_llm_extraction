@@ -1,0 +1,38 @@
+# Claude Code files
+.claude/
+
+# R specific
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Environment variables
+.env
+.Renviron
+
+# Private files
+.add
+
+# renv
+renv/library/
+renv/staging/
+
+# Output files
+results/
+*.log
+
+# Temporary files
+tmp/
+*~
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# API keys and secrets
+config/secrets.R
+api_keys.txt
