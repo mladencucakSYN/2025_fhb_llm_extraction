@@ -1,0 +1,182 @@
+---
+title: "Caching Strategy for Large-Scale Extraction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Implementing Caching
+
+This notebook implements caching to save extraction results and enable resuming from failures.
+
+```{r load-all}
+library(dplyr)
+
+source("../R/gemini_extraction.R")
+source("../R/retry_logic.R")
+source("../R/cache_manager.R")
+
+data_dir <- "../data/fusarium"
+cache_dir <- "../data/cache"
+```
+
+**Result**: Caching functions loaded.
+
+## Test Cache Functions
+
+Demonstrate saving and loading cached extractions.
+
+```{r test-cache}
+cat("=== Testing Cache Functions ===\n\n")
+
+# Create a test extraction result
+test_result <- list(
+  id = "TEST_001",
+  fusarium_species = c("F. graminearum"),
+  crop = c("wheat"),
+  summary = "Test extraction result"
+)
+
+# Save to cache
+cache_extraction("TEST_001", test_result, cache_dir)
+cat("✓ Test result cached\n\n")
+
+# Load from cache
+loaded_results <- load_cached_extractions(cache_dir)
+cat("✓ Loaded", nrow(loaded_results), "cached results\n")
+
+# Check cache stats
+stats <- cache_stats(cache_dir)
+cat("\nCache Statistics:\n")
+cat("  Files:", stats$n_files, "\n")
+cat("  Size:", stats$size_mb, "MB\n")
+```
+
+**Result**: Caching functions work correctly.
+
+## Process with Caching
+
+Extract with automatic caching of results.
+
+```{r process-with-cache}
+sample_10 <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
+
+cat("\n=== Processing with Caching ===\n\n")
+
+results <- list()
+
+for (i in 1:5) {
+  study <- sample_10[i, ]
+  doc_id <- study$id
+
+  cat(sprintf("[%d/5] Doc: %s ", i, doc_id))
+
+  # Extract
+  result <- tryCatch({
+    retry_with_backoff({
+      extract_fusarium_gemini(
+        abstract = study$abstract_clean,
+        title = study$title,
+        keywords = study$keywords_clean
+      )
+    }, max_attempts = 3, base_delay = 2)
+  }, error = function(e) {
+    NULL
+  })
+
+  if (!is.null(result)) {
+    result$id <- doc_id
+
+    # Cache the result
+    cache_extraction(doc_id, result, cache_dir)
+    results[[i]] <- result
+    cat("✓ Cached\n")
+  } else {
+    cat("✗ Failed\n")
+  }
+
+  Sys.sleep(2)
+}
+
+cat("\n✓ Processing complete with caching\n")
+```
+
+**Result**: All successful extractions automatically cached.
+
+## Identify Uncached Documents
+
+Find which documents still need processing.
+
+```{r identify-uncached}
+# Get all documents
+all_docs <- sample_10
+
+# Identify uncached
+uncached <- get_uncached_docs(all_docs, id_col = "id", cache_dir = cache_dir)
+
+cat("\nUncached Documents:\n")
+cat("  Total documents:", nrow(all_docs), "\n")
+cat("  Uncached:", nrow(uncached), "\n")
+cat("  Cached:", nrow(all_docs) - nrow(uncached), "\n")
+```
+
+**Result**: Cache manager identifies which documents still need processing.
+
+## Demonstrate Resume Capability
+
+Show how caching enables resuming after interruption.
+
+```{r demonstrate-resume}
+cat("\n=== Resume Capability ===\n\n")
+
+cat("Scenario: Processing was interrupted after 5 documents\n\n")
+
+# Load all cached results
+cached_results <- load_cached_extractions(cache_dir)
+cat("Already processed:", nrow(cached_results), "documents\n")
+
+# Get remaining documents
+remaining <- get_uncached_docs(sample_10[1:10, ], id_col = "id", cache_dir = cache_dir)
+cat("Remaining to process:", nrow(remaining), "documents\n\n")
+
+cat("✓ Can resume processing from where we left off\n")
+cat("  This saves time and API costs\n")
+```
+
+**Result**: Caching enables efficient resumption after failures or interruptions.
+
+## Summary
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║         CACHING STRATEGY IMPLEMENTED               ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Caching Benefits:\n")
+cat("  ✓ Resume from failures\n")
+cat("  ✓ Avoid re-processing\n")
+cat("  ✓ Save API costs\n")
+cat("  ✓ Track progress\n")
+cat("  ✓ Incremental extraction\n\n")
+
+cat("Cache Functions:\n")
+cat("  - cache_extraction(): Save single result\n")
+cat("  - load_cached_extractions(): Load all cached\n")
+cat("  - get_uncached_docs(): Find remaining work\n")
+cat("  - cache_stats(): Monitor cache size\n\n")
+
+cat("Next: Full extraction in `0420_run_full_extraction.Rmd`\n")
+```
+
+**Result**: Caching strategy ready for production use.
+
+## Next Steps
+
+1. ✓ Tested cache functions
+2. ✓ Processed with automatic caching
+3. ✓ Demonstrated resume capability
+4. Next: Run full extraction in `0420_run_full_extraction.Rmd`

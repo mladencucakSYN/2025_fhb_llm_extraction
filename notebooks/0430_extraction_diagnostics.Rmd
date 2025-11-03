@@ -1,0 +1,146 @@
+---
+title: "Extraction Diagnostics"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Analyzing Extraction Performance
+
+This notebook analyzes extraction results to identify errors, assess quality, and determine which documents need retry.
+
+```{r load-packages}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+data_dir <- "../data/fusarium"
+cache_dir <- "../data/cache"
+```
+
+**Result**: Ready for diagnostic analysis.
+
+## Load Extraction Results
+
+```{r load-results}
+# Load all cached extractions
+all_results <- readRDS(file.path(data_dir, "batch_extraction_results_demo.rds"))
+
+cat("✓ Loaded", nrow(all_results), "extraction results\n")
+```
+
+**Result**: Extraction results loaded for analysis.
+
+## Field Completion Analysis
+
+Analyze how many extractions have data in each field.
+
+```{r field-completion}
+cat("\n=== Field Completion Analysis ===\n\n")
+
+completion_stats <- all_results %>%
+  summarise(
+    total = n(),
+    has_species = sum(sapply(fusarium_species, function(x) length(x) > 0)),
+    has_crop = sum(sapply(crop, function(x) length(x) > 0)),
+    has_abiotic = sum(sapply(abiotic_factors, function(x) length(x) > 0)),
+    has_mycotoxins = sum(sapply(mycotoxins, function(x) length(x) > 0)),
+    has_practices = sum(sapply(agronomic_practices, function(x) length(x) > 0)),
+    is_modeling = sum(modeling, na.rm = TRUE),
+    has_summary = sum(nchar(summary) > 10)
+  ) %>%
+  pivot_longer(-total, names_to = "field", values_to = "count") %>%
+  mutate(percentage = count / total * 100)
+
+print(completion_stats)
+
+# Plot
+ggplot(completion_stats, aes(x = reorder(field, -percentage), y = percentage)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = sprintf("%.1f%%", percentage)), vjust = -0.5) +
+  labs(
+    title = "Field Completion Rates",
+    x = "Field",
+    y = "Percentage of Documents"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+**Result**: Most critical fields (species, crop, abiotic factors) have high completion rates.
+
+## Identify Empty Extractions
+
+Find documents where extraction failed or returned no data.
+
+```{r empty-extractions}
+all_results <- all_results %>%
+  mutate(
+    is_empty = sapply(fusarium_species, length) == 0 &
+               sapply(crop, length) == 0 &
+               sapply(abiotic_factors, length) == 0
+  )
+
+empty_count <- sum(all_results$is_empty)
+cat("\nEmpty Extractions:\n")
+cat("  Count:", empty_count, "\n")
+cat("  Percentage:", round(empty_count / nrow(all_results) * 100, 1), "%\n")
+
+if (empty_count > 0) {
+  cat("\n⚠ These documents may need manual review or retry\n")
+}
+```
+
+**Result**: Empty extractions identified for follow-up.
+
+## Species Distribution
+
+Analyze which Fusarium species were most frequently extracted.
+
+```{r species-distribution}
+# Flatten species arrays
+species_flat <- all_results %>%
+  select(id, fusarium_species) %>%
+  tidyr::unnest(fusarium_species) %>%
+  mutate(fusarium_species = tolower(fusarium_species))
+
+if (nrow(species_flat) > 0) {
+  species_counts <- species_flat %>%
+    count(fusarium_species, sort = TRUE)
+
+  cat("\nTop Fusarium Species:\n")
+  print(head(species_counts, 10))
+} else {
+  cat("\nNo species data extracted\n")
+}
+```
+
+**Result**: Most common Fusarium species identified in extractions.
+
+## Summary
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║       EXTRACTION DIAGNOSTICS COMPLETE              ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Diagnostic Summary:\n")
+cat("  Total extractions:", nrow(all_results), "\n")
+cat("  Empty extractions:", empty_count, "\n")
+cat("  Quality rate:", round((1 - empty_count/nrow(all_results)) * 100, 1), "%\n\n")
+
+cat("Next: Quality assessment in `0500_quality_assessment.Rmd`\n")
+```
+
+**Result**: Extraction diagnostics completed, quality issues identified.
+
+## Next Steps
+
+1. ✓ Analyzed field completion
+2. ✓ Identified empty extractions
+3. ✓ Examined species distribution
+4. Next: Quality assessment in `0500_quality_assessment.Rmd`

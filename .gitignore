@@ -23,11 +23,25 @@ renv/staging/
 results/
 *.log
 
+# Cache and extraction data
+data/cache/*
+data/logs/*
+data/fusarium/*.csv
+data/fusarium/*.rds
+!data/cache/.gitkeep
+!data/logs/.gitkeep
+!data/fusarium/.gitkeep
+
 # Temporary files
 tmp/
 *~
 .DS_Store
 Thumbs.db
+
+# Local development scratchpad
+dev/
+!dev/*.md
+!dev/archive/
 
 # IDE files
 .vscode/

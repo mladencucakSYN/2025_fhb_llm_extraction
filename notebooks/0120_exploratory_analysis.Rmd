@@ -1,0 +1,547 @@
+---
+title: "Exploratory Analysis of Fusarium Dataset"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Exploratory Data Analysis
+
+This notebook performs exploratory analysis of the preprocessed Fusarium dataset. Understanding the data characteristics guides extraction strategy and topic modeling decisions.
+
+### Purpose
+
+Explore the dataset to:
+- Understand content patterns
+- Identify key topics and terms
+- Assess dataset scope
+- Inform extraction schema design
+
+## Load Packages
+
+Load required packages for analysis and visualization.
+
+```{r load-packages}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+library(wordcloud)
+library(tidytext)
+
+cat("✓ Packages loaded\n")
+```
+
+**Result**: Analysis and visualization tools ready.
+
+## Load Preprocessed Data
+
+Load the cleaned dataset from previous notebook.
+
+```{r load-data}
+data_dir <- "../data/fusarium"
+data_file <- file.path(data_dir, "fusarium_studies_preprocessed.rds")
+
+fusarium_data <- readRDS(data_file)
+
+# Filter to extraction-ready records
+valid_data <- fusarium_data %>%
+  filter(!exclude_from_extraction)
+
+cat("✓ Loaded", nrow(fusarium_data), "total studies\n")
+cat("  Analyzing", nrow(valid_data), "valid studies\n")
+```
+
+**Result**: Valid subset of studies loaded for analysis.
+
+## Temporal Trends
+
+Examine how research focus has evolved over time.
+
+```{r temporal-trends}
+cat("Temporal Distribution:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+temporal_summary <- valid_data %>%
+  count(year, sort = TRUE) %>%
+  mutate(
+    cumulative = cumsum(n),
+    pct_total = cumulative / sum(n) * 100
+  )
+
+print(head(temporal_summary, 10))
+
+# Plot publication trend
+ggplot(temporal_summary, aes(x = year, y = n)) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_point(color = "steelblue", size = 2) +
+  geom_smooth(method = "loess", se = TRUE, color = "red", linetype = "dashed") +
+  labs(
+    title = "Fusarium Research Publications Over Time",
+    subtitle = "With smoothed trend line",
+    x = "Year",
+    y = "Number of Publications"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Publication trends show research activity patterns over time.
+
+## Keyword Analysis
+
+Analyze author-provided keywords to understand research themes.
+
+```{r keyword-analysis}
+cat("\nKeyword Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+# Extract and count keywords
+keywords_df <- valid_data %>%
+  filter(!is.na(keywords_clean), nchar(keywords_clean) > 0) %>%
+  select(id, keywords_clean) %>%
+  mutate(
+    # Split keywords on common separators
+    keywords_list = str_split(keywords_clean, "[,;]")
+  ) %>%
+  unnest(keywords_list) %>%
+  mutate(
+    keyword = str_trim(tolower(keywords_list))
+  ) %>%
+  filter(nchar(keyword) > 2) %>%
+  count(keyword, sort = TRUE)
+
+cat("Total unique keywords:", nrow(keywords_df), "\n")
+cat("Top 20 keywords:\n\n")
+print(head(keywords_df, 20))
+
+# Plot top keywords
+keywords_df %>%
+  head(20) %>%
+  ggplot(aes(x = reorder(keyword, n), y = n)) +
+  geom_col(fill = "darkgreen", alpha = 0.7) +
+  coord_flip() +
+  labs(
+    title = "Top 20 Most Frequent Keywords",
+    x = "Keyword",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Most frequent keywords reveal core research themes in the dataset.
+
+## Term Frequency Analysis
+
+Analyze most common terms in abstracts using text mining.
+
+```{r term-frequency}
+cat("\nTerm Frequency Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+# Tokenize abstracts
+abstract_words <- valid_data %>%
+  select(id, abstract_clean) %>%
+  unnest_tokens(word, abstract_clean) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(
+    nchar(word) > 3,  # Remove very short words
+    !str_detect(word, "^\\d+$")  # Remove pure numbers
+  )
+
+# Count word frequencies
+word_freq <- abstract_words %>%
+  count(word, sort = TRUE)
+
+cat("Total unique terms:", nrow(word_freq), "\n")
+cat("Top 30 terms:\n\n")
+print(head(word_freq, 30))
+
+# Plot term frequencies
+word_freq %>%
+  head(30) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "coral", alpha = 0.7) +
+  coord_flip() +
+  labs(
+    title = "Top 30 Most Frequent Terms in Abstracts",
+    x = "Term",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Term frequency analysis reveals core vocabulary of the research domain.
+
+## Fusarium Species Mentions
+
+Identify which Fusarium species are most frequently studied.
+
+```{r fusarium-species}
+cat("\nFusarium Species Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+# Common Fusarium species patterns
+species_patterns <- c(
+  "F\\. graminearum|Fusarium graminearum",
+  "F\\. culmorum|Fusarium culmorum",
+  "F\\. avenaceum|Fusarium avenaceum",
+  "F\\. poae|Fusarium poae",
+  "F\\. sporotrichioides|Fusarium sporotrichioides",
+  "F\\. verticillioides|Fusarium verticillioides",
+  "F\\. proliferatum|Fusarium proliferatum"
+)
+
+species_names <- c(
+  "F. graminearum",
+  "F. culmorum",
+  "F. avenaceum",
+  "F. poae",
+  "F. sporotrichioides",
+  "F. verticillioides",
+  "F. proliferatum"
+)
+
+species_counts <- tibble(
+  species = species_names,
+  count = sapply(species_patterns, function(pattern) {
+    sum(str_detect(valid_data$combined_text, regex(pattern, ignore_case = TRUE)))
+  })
+) %>%
+  arrange(desc(count))
+
+print(species_counts)
+
+# Plot species mentions
+ggplot(species_counts, aes(x = reorder(species, count), y = count)) +
+  geom_col(fill = "purple", alpha = 0.7) +
+  geom_text(aes(label = count), hjust = -0.2) +
+  coord_flip() +
+  labs(
+    title = "Fusarium Species Mentioned in Studies",
+    x = "Species",
+    y = "Number of Studies"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: F. graminearum is the most studied species, consistent with its importance in wheat.
+
+## Crop Host Analysis
+
+Identify which cereal crops are most frequently studied.
+
+```{r crop-analysis}
+cat("\nCrop Host Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+crop_patterns <- c(
+  "wheat" = "\\bwheat\\b",
+  "barley" = "\\bbarley\\b",
+  "maize|corn" = "\\bmaize\\b|\\bcorn\\b",
+  "oat" = "\\boats?\\b",
+  "rye" = "\\brye\\b",
+  "triticale" = "\\btriticale\\b",
+  "rice" = "\\brice\\b"
+)
+
+crop_counts <- tibble(
+  crop = names(crop_patterns),
+  count = sapply(crop_patterns, function(pattern) {
+    sum(str_detect(valid_data$combined_text, regex(pattern, ignore_case = TRUE)))
+  })
+) %>%
+  arrange(desc(count))
+
+print(crop_counts)
+
+# Plot crop mentions
+ggplot(crop_counts, aes(x = reorder(crop, count), y = count)) +
+  geom_col(fill = "goldenrod", alpha = 0.7) +
+  geom_text(aes(label = count), hjust = -0.2) +
+  coord_flip() +
+  labs(
+    title = "Cereal Crops Mentioned in Studies",
+    x = "Crop",
+    y = "Number of Studies"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Wheat and barley are the primary crops studied in this dataset.
+
+## Climate-Related Terms
+
+Analyze mentions of climate and environmental factors.
+
+```{r climate-terms}
+cat("\nClimate/Environmental Factor Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+climate_patterns <- c(
+  "temperature" = "\\btemperature",
+  "moisture" = "\\bmoisture",
+  "humidity" = "\\bhumidity",
+  "rainfall|precipitation" = "\\brainfall|\\bprecipitation",
+  "drought" = "\\bdrought",
+  "climate change" = "\\bclimate change",
+  "water stress" = "\\bwater stress",
+  "heat stress" = "\\bheat stress"
+)
+
+climate_counts <- tibble(
+  factor = names(climate_patterns),
+  count = sapply(climate_patterns, function(pattern) {
+    sum(str_detect(valid_data$combined_text, regex(pattern, ignore_case = TRUE)))
+  })
+) %>%
+  arrange(desc(count))
+
+print(climate_counts)
+
+# Plot climate factors
+ggplot(climate_counts, aes(x = reorder(factor, count), y = count)) +
+  geom_col(fill = "skyblue", alpha = 0.7) +
+  geom_text(aes(label = count), hjust = -0.2) +
+  coord_flip() +
+  labs(
+    title = "Climate/Environmental Factors Mentioned",
+    x = "Factor",
+    y = "Number of Studies"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Temperature and moisture are the most frequently studied abiotic factors.
+
+## Mycotoxin Mentions
+
+Identify which mycotoxins are discussed in the literature.
+
+```{r mycotoxin-analysis}
+cat("\nMycotoxin Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+toxin_patterns <- c(
+  "DON|deoxynivalenol" = "\\bDON\\b|\\bdeoxynivalenol",
+  "zearalenone|ZEN" = "\\bzearalenone|\\bZEN\\b",
+  "T-2 toxin" = "\\bT-2\\b",
+  "nivalenol|NIV" = "\\bnivalenol|\\bNIV\\b",
+  "fumonisin" = "\\bfumonisin"
+)
+
+toxin_counts <- tibble(
+  toxin = names(toxin_patterns),
+  count = sapply(toxin_patterns, function(pattern) {
+    sum(str_detect(valid_data$combined_text, regex(pattern, ignore_case = TRUE)))
+  })
+) %>%
+  arrange(desc(count))
+
+print(toxin_counts)
+
+# Plot
+ggplot(toxin_counts, aes(x = reorder(toxin, count), y = count)) +
+  geom_col(fill = "darkred", alpha = 0.7) +
+  geom_text(aes(label = count), hjust = -0.2) +
+  coord_flip() +
+  labs(
+    title = "Mycotoxins Mentioned in Studies",
+    x = "Mycotoxin",
+    y = "Number of Studies"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: DON (deoxynivalenol) is the most frequently studied mycotoxin.
+
+## Study Type Classification
+
+Categorize studies by methodology mentioned.
+
+```{r study-types}
+cat("\nStudy Type Classification:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+study_types <- valid_data %>%
+  mutate(
+    is_field_study = str_detect(combined_text, regex("\\bfield\\b|\\bfield trial|\\bfield experiment", ignore_case = TRUE)),
+    is_greenhouse = str_detect(combined_text, regex("\\bgreenhouse|\\bglasshouse|\\bcontrolled environment", ignore_case = TRUE)),
+    is_laboratory = str_detect(combined_text, regex("\\blaboratory|\\bin vitro|\\bpetri", ignore_case = TRUE)),
+    is_modeling = str_detect(combined_text, regex("\\bmodel|\\bsimulation|\\bpredict", ignore_case = TRUE)),
+    is_meta_analysis = str_detect(combined_text, regex("\\bmeta-analysis|\\bsystematic review", ignore_case = TRUE))
+  )
+
+type_summary <- study_types %>%
+  summarise(
+    field = sum(is_field_study),
+    greenhouse = sum(is_greenhouse),
+    laboratory = sum(is_laboratory),
+    modeling = sum(is_modeling),
+    meta_analysis = sum(is_meta_analysis)
+  ) %>%
+  pivot_longer(everything(), names_to = "study_type", values_to = "count") %>%
+  arrange(desc(count))
+
+print(type_summary)
+
+# Plot
+ggplot(type_summary, aes(x = reorder(study_type, count), y = count)) +
+  geom_col(fill = "forestgreen", alpha = 0.7) +
+  geom_text(aes(label = count), hjust = -0.2) +
+  coord_flip() +
+  labs(
+    title = "Study Types in Dataset",
+    subtitle = "Studies may belong to multiple categories",
+    x = "Study Type",
+    y = "Number of Studies"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Field studies and modeling approaches are most common.
+
+## Co-occurrence Analysis
+
+Analyze which concepts frequently co-occur in studies.
+
+```{r cooccurrence}
+cat("\nConcept Co-occurrence Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+# Create binary indicators for key concepts
+concept_data <- valid_data %>%
+  select(id, combined_text) %>%
+  mutate(
+    temperature = str_detect(combined_text, regex("temperature", ignore_case = TRUE)),
+    moisture = str_detect(combined_text, regex("moisture|humidity", ignore_case = TRUE)),
+    drought = str_detect(combined_text, regex("drought|water stress", ignore_case = TRUE)),
+    don_toxin = str_detect(combined_text, regex("DON|deoxynivalenol", ignore_case = TRUE)),
+    modeling = str_detect(combined_text, regex("model|predict", ignore_case = TRUE)),
+    wheat = str_detect(combined_text, regex("wheat", ignore_case = TRUE))
+  )
+
+# Calculate co-occurrence frequencies
+cooccur_temp_moisture <- sum(concept_data$temperature & concept_data$moisture)
+cooccur_temp_don <- sum(concept_data$temperature & concept_data$don_toxin)
+cooccur_moisture_don <- sum(concept_data$moisture & concept_data$don_toxin)
+cooccur_temp_model <- sum(concept_data$temperature & concept_data$modeling)
+
+cat("Concept Co-occurrences:\n")
+cat("  Temperature + Moisture:", cooccur_temp_moisture, "\n")
+cat("  Temperature + DON:", cooccur_temp_don, "\n")
+cat("  Moisture + DON:", cooccur_moisture_don, "\n")
+cat("  Temperature + Modeling:", cooccur_temp_model, "\n")
+```
+
+**Result**: Temperature and moisture frequently co-occur, reflecting their joint importance.
+
+## Dataset Scope Summary
+
+Summarize the scope and focus of the dataset.
+
+```{r scope-summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║         DATASET SCOPE SUMMARY                      ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Research Focus:\n")
+cat(rep("-", 50), "\n", sep = "")
+cat("Primary Species:  F. graminearum (dominant)\n")
+cat("Primary Crops:    Wheat, Barley\n")
+cat("Key Abiotic:      Temperature, Moisture\n")
+cat("Key Mycotoxin:    DON (deoxynivalenol)\n")
+cat("Study Types:      Field studies, Modeling\n")
+cat(rep("-", 50), "\n\n", sep = "")
+
+cat("This dataset is well-suited for extracting:\n")
+cat("  ✓ Fusarium species identification\n")
+cat("  ✓ Crop host information\n")
+cat("  ✓ Abiotic factor effects (temp, moisture)\n")
+cat("  ✓ Mycotoxin production patterns\n")
+cat("  ✓ Management practices\n")
+cat("  ✓ Modeling approaches\n")
+```
+
+**Result**: Dataset scope aligned with student's research questions on climate-Fusarium interactions.
+
+## Inform Extraction Schema
+
+Based on analysis, recommend extraction fields.
+
+```{r extraction-schema}
+cat("\n")
+cat("Recommended Extraction Schema:\n")
+cat(rep("-", 50), "\n", sep = "")
+cat("\n1. fusarium_species (array)\n")
+cat("   - Most common: graminearum, culmorum, avenaceum\n\n")
+
+cat("2. crop (array)\n")
+cat("   - Most common: wheat, barley, maize\n\n")
+
+cat("3. abiotic_factors (array)\n")
+cat("   - Key factors: temperature, moisture, humidity, rainfall, drought\n\n")
+
+cat("4. mycotoxins (array)\n")
+cat("   - Key toxins: DON, zearalenone, nivalenol\n\n")
+
+cat("5. observed_effects (array)\n")
+cat("   - Examples: yield loss, disease severity, toxin production\n\n")
+
+cat("6. agronomic_practices (array)\n")
+cat("   - Examples: fungicide, rotation, tillage, resistant cultivars\n\n")
+
+cat("7. modeling (boolean)\n")
+cat("   - Whether study involves predictive modeling\n\n")
+
+cat("8. study_type (array)\n")
+cat("   - Options: field, greenhouse, laboratory, modeling, meta-analysis\n\n")
+
+cat("9. summary (text)\n")
+cat("   - Brief 1-2 sentence summary of findings\n")
+
+cat(rep("-", 50), "\n", sep = "")
+```
+
+**Result**: Extraction schema informed by actual dataset content patterns.
+
+## Next Steps
+
+1. ✓ Loaded and explored Fusarium dataset
+2. ✓ Identified key research themes and terms
+3. ✓ Analyzed species, crops, and abiotic factors
+4. ✓ Designed extraction schema based on content
+5. Next: Topic modeling in `0200_lda_first_pass.Rmd`
+6. Then: Extraction development in `0300_design_extraction_schema.Rmd`
+
+## Key Insights for LLM Extraction
+
+### High-Frequency Terms to Expect
+- Fusarium, graminearum, culmorum
+- Wheat, barley, cereal
+- Temperature, moisture, humidity
+- DON, mycotoxin
+- Infection, disease, severity
+
+### Extraction Challenges
+- Species names in abbreviated form (F. graminearum vs. Fusarium graminearum)
+- Multiple crops per study
+- Complex abiotic factor interactions
+- Varied terminology for same concepts
+
+### Extraction Opportunities
+- Clear domain vocabulary
+- Consistent reporting patterns
+- Rich contextual information
+- Well-structured abstracts

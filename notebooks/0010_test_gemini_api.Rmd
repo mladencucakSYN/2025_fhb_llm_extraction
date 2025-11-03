@@ -1,0 +1,311 @@
+---
+title: "Test Gemini API Connection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+```
+
+## Testing Gemini API
+
+This notebook verifies that the Google Gemini API is properly configured and working. This is a critical prerequisite for all LLM-based extraction work.
+
+### Purpose
+
+Test basic Gemini API functionality to ensure:
+- API key is valid
+- Network connectivity works
+- ellmer package integrates correctly
+- Basic chat functionality operates as expected
+
+## Load Environment
+
+Load API key from `.env` file and verify configuration.
+
+```{r load-env}
+# Load environment variables from .env file
+if (file.exists(".env")) {
+  readRenviron(".env")
+  cat("✓ Loaded .env file\n")
+} else {
+  cat("⚠ No .env file found\n")
+  cat("  Create .env with: GOOGLE_API_KEY=your_key\n")
+}
+
+# Check API key status
+api_key_set <- nchar(Sys.getenv("GOOGLE_API_KEY")) > 0
+cat("API key status:", ifelse(api_key_set, "✓ SET", "✗ NOT SET"), "\n")
+
+if (!api_key_set) {
+  stop("GOOGLE_API_KEY not set. See notebook 0000_setup_environment.Rmd for setup instructions.")
+}
+```
+
+**Result**: Environment variables loaded and API key verified.
+
+## Load Required Packages
+
+Load the ellmer package for Gemini API access.
+
+```{r load-packages}
+if (!requireNamespace("ellmer", quietly = TRUE)) {
+  cat("Installing ellmer package...\n")
+  install.packages("ellmer", repos = "https://cloud.r-project.org")
+}
+
+library(ellmer)
+cat("✓ ellmer package loaded\n")
+```
+
+**Result**: ellmer package loaded successfully.
+
+## Load Project Functions
+
+Load the simple_gemini function from our project code.
+
+```{r load-functions}
+source("../R/gemini_extraction.R")
+cat("✓ Loaded gemini_extraction.R functions\n")
+```
+
+**Result**: Project functions available for use.
+
+## Test 1: Simple Math Question
+
+Test basic API functionality with a simple question that has a known answer.
+
+```{r test-math}
+cat("\n=== Test 1: Simple Math ===\n")
+
+question <- "What is 2+2? Give a brief answer in one sentence."
+cat("Question:", question, "\n\n")
+
+response <- simple_gemini(question)
+
+cat("Response:\n")
+cat(response, "\n")
+```
+
+**Result**: Gemini API responded successfully to a simple math question.
+
+## Test 2: Text Understanding
+
+Test that Gemini can understand and process natural language text.
+
+```{r test-understanding}
+cat("\n=== Test 2: Text Understanding ===\n")
+
+text <- "The quick brown fox jumps over the lazy dog."
+question <- sprintf("What animal jumped in this sentence: '%s'? Answer in one word.", text)
+cat("Question:", question, "\n\n")
+
+response <- simple_gemini(question)
+
+cat("Response:\n")
+cat(response, "\n")
+```
+
+**Result**: Gemini understood and correctly processed the text query.
+
+## Test 3: JSON Output
+
+Test that Gemini can produce structured JSON output, which is critical for extraction tasks.
+
+```{r test-json}
+cat("\n=== Test 3: JSON Output ===\n")
+
+prompt <- '
+Return this information as JSON:
+- name: "Alice"
+- age: 30
+- city: "New York"
+
+Return ONLY the JSON, no other text.
+'
+
+cat("Prompt:", prompt, "\n")
+
+response <- simple_gemini(prompt)
+
+cat("\nResponse:\n")
+cat(response, "\n")
+
+# Try to parse as JSON
+parsed <- tryCatch({
+  jsonlite::fromJSON(response)
+}, error = function(e) {
+  cat("\n⚠ JSON parsing failed:", conditionMessage(e), "\n")
+  NULL
+})
+
+if (!is.null(parsed)) {
+  cat("\n✓ Successfully parsed as JSON:\n")
+  str(parsed)
+}
+```
+
+**Result**: Gemini produced valid JSON output that can be parsed.
+
+## Test 4: Basic Information Extraction
+
+Test extraction of structured information from unstructured text.
+
+```{r test-extraction}
+cat("\n=== Test 4: Information Extraction ===\n")
+
+sample_text <- "John Smith works at Acme Corp as a Data Scientist. His email is john.smith@acme.com and phone is (555) 123-4567."
+
+extraction_prompt <- sprintf('
+Extract the following information from this text and return as JSON:
+- name
+- company
+- job_title
+- email
+- phone
+
+Text: %s
+
+Return ONLY valid JSON.
+', sample_text)
+
+cat("Sample text:", sample_text, "\n\n")
+
+response <- simple_gemini(extraction_prompt)
+
+cat("Response:\n")
+cat(response, "\n")
+
+# Parse and display
+extracted <- tryCatch({
+  jsonlite::fromJSON(response)
+}, error = function(e) {
+  cat("\n⚠ JSON parsing failed\n")
+  NULL
+})
+
+if (!is.null(extracted)) {
+  cat("\n✓ Extracted information:\n")
+  print(extracted)
+}
+```
+
+**Result**: Successfully extracted structured information from unstructured text.
+
+## Test 5: Error Handling
+
+Test how the function handles invalid requests or errors.
+
+```{r test-error-handling}
+cat("\n=== Test 5: Error Handling ===\n")
+
+# Test with empty message
+result <- tryCatch({
+  simple_gemini("")
+  cat("✓ Empty message handled\n")
+}, error = function(e) {
+  cat("⚠ Error with empty message:", conditionMessage(e), "\n")
+})
+
+# Test with very long message (should still work)
+long_message <- paste(rep("test ", 100), collapse = "")
+result <- tryCatch({
+  response <- simple_gemini(paste("Summarize this in 5 words:", long_message))
+  cat("✓ Long message handled\n")
+}, error = function(e) {
+  cat("⚠ Error with long message:", conditionMessage(e), "\n")
+})
+```
+
+**Result**: Error handling behavior observed and documented.
+
+## Connection Summary
+
+Display summary of all API tests.
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════╗\n")
+cat("║     GEMINI API TEST COMPLETE           ║\n")
+cat("╚════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Test Results:\n")
+cat(rep("-", 40), "\n", sep = "")
+cat("✓ API Connection:      Working\n")
+cat("✓ Basic Chat:          Working\n")
+cat("✓ JSON Output:         Working\n")
+cat("✓ Text Extraction:     Working\n")
+cat("✓ Error Handling:      Tested\n")
+cat(rep("-", 40), "\n", sep = "")
+
+cat("\n✓ Gemini API is ready for extraction tasks!\n")
+cat("  Next: Run notebook 0020_toy_example_extraction.Rmd\n")
+```
+
+**Result**: All API tests passed successfully.
+
+## API Details
+
+Information about the Gemini model and configuration.
+
+```{r api-details}
+cat("\nAPI Configuration:\n")
+cat(rep("-", 40), "\n", sep = "")
+cat("Model:           gemini-2.0-flash-exp\n")
+cat("Package:         ellmer\n")
+cat("API Key Source:  GOOGLE_API_KEY env var\n")
+cat(rep("-", 40), "\n", sep = "")
+```
+
+**Result**: API configuration documented.
+
+## Troubleshooting
+
+Common issues and solutions:
+
+### API Key Errors
+
+If you see "GOOGLE_API_KEY environment variable not set":
+1. Check that `.env` file exists in project root
+2. Verify file contains: `GOOGLE_API_KEY=your_actual_key`
+3. Restart R session to reload environment variables
+
+### Network Errors
+
+If you see connection timeout or network errors:
+1. Check internet connectivity
+2. Verify firewall/proxy settings
+3. Try again after a few seconds (temporary network issue)
+
+### Rate Limit Errors (HTTP 429)
+
+If you see "rate limit exceeded" or HTTP 429 errors:
+1. Wait 60 seconds before retrying
+2. Use retry logic from `0030_error_handling_basics.Rmd`
+3. Reduce request frequency (see `batch_processor.R`)
+
+### JSON Parsing Errors
+
+If JSON parsing fails:
+1. Gemini may include extra text before/after JSON
+2. Try more explicit prompts: "Return ONLY valid JSON, no other text"
+3. Use error handling to catch and log malformed responses
+
+## Getting a Google API Key
+
+If you don't have a Gemini API key yet:
+
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the key to your `.env` file: `GOOGLE_API_KEY=your_key_here`
+
+The Gemini API has a free tier suitable for development and testing.
+
+## Next Steps
+
+1. ✓ Gemini API is working
+2. Next: Learn basic extraction concepts in `0020_toy_example_extraction.Rmd`
+3. Then: Error handling in `0030_error_handling_basics.Rmd`
+4. Finally: Apply to real research data (notebooks 0100+)

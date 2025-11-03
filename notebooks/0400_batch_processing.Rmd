@@ -1,0 +1,148 @@
+---
+title: "Batch Processing with Rate Limiting"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Production Batch Processing
+
+This notebook demonstrates batch processing for extracting data from large numbers of studies with rate limiting and progress tracking.
+
+```{r load-all}
+library(dplyr)
+
+source("../R/gemini_extraction.R")
+source("../R/retry_logic.R")
+source("../R/batch_processor.R")
+
+data_dir <- "../data/fusarium"
+```
+
+**Result**: Batch processing tools loaded.
+
+## Load Test Sample
+
+```{r load-sample}
+# Start with 50-study sample
+sample_50 <- readRDS(file.path(data_dir, "sample_50_studies.rds"))
+
+cat("✓ Loaded", nrow(sample_50), "studies for batch processing\n")
+```
+
+**Result**: Test sample loaded for batch extraction.
+
+## Define Extraction Function for Batch
+
+```{r define-extractor}
+extract_one_study <- function(study_row) {
+  result <- tryCatch({
+    retry_with_backoff({
+      extract_fusarium_gemini(
+        abstract = study_row$abstract_clean,
+        title = study_row$title,
+        keywords = study_row$keywords_clean
+      )
+    }, max_attempts = 3, base_delay = 2)
+  }, error = function(e) {
+    return(NULL)
+  })
+
+  if (!is.null(result)) {
+    result$id <- study_row$id
+    as.data.frame(result, stringsAsFactors = FALSE)
+  } else {
+    NULL
+  }
+}
+
+cat("✓ Extraction function defined\n")
+```
+
+**Result**: Single-study extraction function ready for batch processing.
+
+## Run Batch Processing
+
+Process studies in batches with rate limiting to avoid API limits.
+
+```{r run-batch}
+cat("\n=== Starting Batch Processing ===\n\n")
+
+# Process first 10 studies as demonstration
+demo_sample <- sample_50[1:10, ]
+
+results_df <- process_batch(
+  docs = demo_sample,
+  extract_fn = extract_one_study,
+  id_col = "id",
+  batch_size = 5,      # Process 5 at a time
+  delay_seconds = 10,  # Wait 10 seconds between batches
+  verbose = TRUE
+)
+
+cat("\n✓ Batch processing complete\n")
+```
+
+**Result**: Batch processing completed with automatic rate limiting.
+
+## Examine Results
+
+```{r examine-results}
+cat("\n=== Processing Results ===\n\n")
+
+cat("Total processed:", nrow(results_df), "\n")
+cat("Success rate:", nrow(results_df) / 10 * 100, "%\n\n")
+
+if (nrow(results_df) > 0) {
+  cat("Sample of extracted data:\n")
+  print(head(results_df %>% select(id, fusarium_species, crop, modeling), 3))
+}
+```
+
+**Result**: Extraction results collected in structured data frame.
+
+## Save Batch Results
+
+```{r save-results}
+results_file <- file.path(data_dir, "batch_extraction_results_demo.rds")
+saveRDS(results_df, results_file)
+
+cat("✓ Results saved:", results_file, "\n")
+```
+
+**Result**: Batch results saved for analysis.
+
+## Summary
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║        BATCH PROCESSING DEMONSTRATED               ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Batch Processing Features:\n")
+cat("  ✓ Rate limiting (10 studies/min)\n")
+cat("  ✓ Progress tracking\n")
+cat("  ✓ Error handling per document\n")
+cat("  ✓ Automatic delays between batches\n")
+cat("  ✓ Results aggregation\n\n")
+
+cat("For full dataset:\n")
+cat("  - Use smaller batch_size (5-10)\n")
+cat("  - Longer delay_seconds (30-60)\n")
+cat("  - Enable caching (notebook 0410)\n\n")
+
+cat("Next: Caching strategy in `0410_caching_strategy.Rmd`\n")
+```
+
+**Result**: Batch processing validated, ready for full-scale extraction.
+
+## Next Steps
+
+1. ✓ Defined batch extraction function
+2. ✓ Processed 10 studies with rate limiting
+3. ✓ Validated results aggregation
+4. Next: Implement caching in `0410_caching_strategy.Rmd`

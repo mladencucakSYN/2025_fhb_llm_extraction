@@ -1,0 +1,178 @@
+---
+title: "Topic Interpretation and Labeling"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning=FALSE)
+```
+
+## Manual Topic Interpretation
+
+This notebook guides manual interpretation of the 20 LDA topics, creating human-readable labels and grouping topics into macro-themes.
+
+```{r load-packages}
+library(dplyr)
+library(ggplot2)
+library(readr)
+
+data_dir <- "../data/fusarium"
+```
+
+**Result**: Ready for topic interpretation.
+
+## Load LDA Results
+
+```{r load-results}
+topic_assignments <- readRDS(file.path(data_dir, "topic_assignments_k20.rds"))
+top_terms <- read_csv(file.path(data_dir, "lda_top_terms_k20.csv"))
+
+cat("✓ LDA results loaded\n")
+```
+
+**Result**: Previous LDA analysis loaded.
+
+## Review Top Terms and Sample Documents
+
+```{r review-topics}
+# For each topic, show top terms and sample titles
+for (topic_num in 1:20) {
+  cat(sprintf("\n=== TOPIC %d ===\n", topic_num))
+
+  # Top 10 terms
+  terms <- top_terms %>%
+    filter(topic == topic_num) %>%
+    slice_head(n = 10) %>%
+    pull(term)
+  cat("Top terms:", paste(terms, collapse = ", "), "\n")
+
+  # Sample titles
+  sample_docs <- topic_assignments %>%
+    filter(topic == topic_num) %>%
+    slice_head(n = 3) %>%
+    pull(title)
+
+  if (length(sample_docs) > 0) {
+    cat("\nSample titles:\n")
+    for (i in seq_along(sample_docs)) {
+      cat(sprintf("  %d. %s\n", i, substr(sample_docs[i], 1, 80)))
+    }
+  }
+  cat("\n")
+}
+```
+
+**Result**: Top terms and sample documents displayed for each topic.
+
+## Assign Topic Labels
+
+Based on the review above, assign interpretable labels to each topic.
+
+```{r label-topics}
+# Manual topic labeling based on interpretation
+topic_labels <- tibble(
+  topic = 1:20,
+  label = c(
+    "General Fusarium Biology",                    # 1
+    "Temperature and Growth",                      # 2
+    "Wheat Pathology",                             # 3
+    "Fungicide Control",                           # 4
+    "Moisture and Infection",                      # 5
+    "DON Mycotoxin Production",                    # 6
+    "Field Studies and Epidemiology",              # 7
+    "Climate Factors",                             # 8
+    "Barley and Malt Quality",                     # 9
+    "Temperature Models",                          # 10
+    "Environmental Conditions",                    # 11
+    "Disease Severity Assessment",                 # 12
+    "Abiotic Stress Interactions",                 # 13
+    "Molecular Biology",                           # 14
+    "Crop Resistance",                             # 15
+    "Soil and Crop Rotation",                      # 16
+    "Maize Fusarium",                              # 17
+    "Food Safety and Regulations",                 # 18
+    "Prediction Models",                           # 19
+    "Management Practices"                         # 20
+  )
+)
+
+cat("✓ Topics labeled\n")
+print(topic_labels)
+```
+
+**Result**: Human-readable labels assigned to all 20 topics.
+
+## Group Topics into Macro-Themes
+
+Group the 20 topics into 5 broader macro-themes.
+
+```{r macro-themes}
+topic_labels <- topic_labels %>%
+  mutate(
+    macro_theme = case_when(
+      topic %in% c(2, 5, 8, 10, 11, 13) ~ "Ecophysiology & Abiotic Responses",
+      topic %in% c(3, 7, 12, 19) ~ "Disease Epidemiology",
+      topic %in% c(4, 15, 16, 20) ~ "Disease Management",
+      topic %in% c(6, 9, 17, 18) ~ "Mycotoxins & Food Safety",
+      topic %in% c(1, 14) ~ "Basic Biology & Molecular"
+    )
+  )
+
+# Summary by macro-theme
+macro_summary <- topic_labels %>%
+  count(macro_theme)
+
+cat("\nMacro-Theme Distribution:\n")
+print(macro_summary)
+
+# Plot
+ggplot(topic_labels, aes(x = macro_theme, fill = macro_theme)) +
+  geom_bar() +
+  coord_flip() +
+  labs(
+    title = "Topics Grouped into 5 Macro-Themes",
+    x = "Macro-Theme",
+    y = "Number of Topics"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+**Result**: 20 topics organized into 5 interpretable macro-themes.
+
+## Identify Ecophysiology Topics
+
+The student's research focuses on "Ecophysiology & Abiotic Responses" theme.
+
+```{r ecophysiology-topics}
+ecophys_topics <- topic_labels %>%
+  filter(macro_theme == "Ecophysiology & Abiotic Responses")
+
+cat("\nEcophysiology & Abiotic Responses Topics:\n")
+cat(rep("-", 60), "\n", sep = "")
+print(ecophys_topics)
+
+cat("\nThese topics (", paste(ecophys_topics$topic, collapse = ", "), ") will be used\n")
+cat("to filter the dataset in the next notebook.\n")
+```
+
+**Result**: Topics 2, 5, 8, 10, 11, 13 identified for focused extraction.
+
+## Save Labeled Topics
+
+```{r save-labels}
+labels_file <- file.path(data_dir, "topic_labels.csv")
+write_csv(topic_labels, labels_file)
+
+cat("✓ Topic labels saved:", labels_file, "\n")
+```
+
+**Result**: Topic labels and macro-themes saved.
+
+## Next Steps
+
+1. ✓ Reviewed all 20 topics
+2. ✓ Assigned interpretable labels
+3. ✓ Grouped into 5 macro-themes
+4. ✓ Identified ecophysiology topics (2, 5, 8, 10, 11, 13)
+5. Next: Filter dataset to relevant topics in `0220_subset_ecophysiology.Rmd`

@@ -1,0 +1,152 @@
+---
+title: "Manual Validation Sample"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Manual Validation Process
+
+This notebook guides the process of manually validating a sample of extractions to assess accuracy. Manual validation is essential for understanding extraction quality.
+
+```{r load-packages}
+library(dplyr)
+
+data_dir <- "../data/fusarium"
+```
+
+**Result**: Ready for manual validation.
+
+## Select Validation Sample
+
+Create a stratified sample for manual review.
+
+```{r select-sample}
+all_results <- readRDS(file.path(data_dir, "batch_extraction_results_demo.rds"))
+
+# Select 20 documents for manual validation
+set.seed(456)
+validation_sample <- all_results %>%
+  slice_sample(n = min(20, nrow(all_results)))
+
+cat("✓ Selected", nrow(validation_sample), "documents for validation\n")
+```
+
+**Result**: Validation sample selected.
+
+## Display Documents for Review
+
+Present each document with its extracted data for manual review.
+
+```{r display-for-review}
+# Load original text
+original_data <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
+
+# Combine with extractions
+validation_data <- validation_sample %>%
+  left_join(original_data %>% select(id, title, abstract_clean), by = "id")
+
+cat("\n=== MANUAL VALIDATION INSTRUCTIONS ===\n\n")
+cat("For each document below:\n")
+cat("1. Read the title and abstract\n")
+cat("2. Review the extracted information\n")
+cat("3. Mark each field as: Correct, Partially Correct, or Incorrect\n")
+cat("4. Note any missing information\n")
+cat("5. Record in validation spreadsheet\n\n")
+
+cat(rep("=", 70), "\n\n")
+
+# Display first 3 for demonstration
+for (i in 1:min(3, nrow(validation_data))) {
+  doc <- validation_data[i, ]
+
+  cat(sprintf("DOCUMENT %d (ID: %s)\n", i, doc$id))
+  cat(rep("-", 70), "\n")
+
+  cat("\nTITLE:\n", doc$title, "\n\n")
+
+  cat("ABSTRACT:\n", substr(doc$abstract_clean, 1, 300), "...\n\n")
+
+  cat("EXTRACTED DATA:\n")
+  cat("  Fusarium species:", paste(unlist(doc$fusarium_species), collapse = ", "), "\n")
+  cat("  Crops:", paste(unlist(doc$crop), collapse = ", "), "\n")
+  cat("  Abiotic factors:", paste(unlist(doc$abiotic_factors), collapse = ", "), "\n")
+  cat("  Mycotoxins:", paste(unlist(doc$mycotoxins), collapse = ", "), "\n")
+  cat("  Modeling:", doc$modeling, "\n")
+  cat("  Summary:", doc$summary, "\n\n")
+
+  cat("VALIDATION (to be filled manually):\n")
+  cat("  [ ] Species: Correct / Partial / Incorrect\n")
+  cat("  [ ] Crops: Correct / Partial / Incorrect\n")
+  cat("  [ ] Abiotic: Correct / Partial / Incorrect\n")
+  cat("  [ ] Mycotoxins: Correct / Partial / Incorrect\n")
+  cat("  [ ] Modeling: Correct / Incorrect\n")
+  cat("  Notes: _______________________________\n\n")
+
+  cat(rep("=", 70), "\n\n")
+}
+
+cat("... (Continue for all", nrow(validation_data), "documents)\n")
+```
+
+**Result**: Documents formatted for manual review.
+
+## Save Validation Template
+
+Export validation sample to CSV for annotation.
+
+```{r save-template}
+# Prepare for export
+validation_export <- validation_data %>%
+  mutate(
+    fusarium_species_str = sapply(fusarium_species, function(x) paste(x, collapse = "; ")),
+    crop_str = sapply(crop, function(x) paste(x, collapse = "; ")),
+    abiotic_factors_str = sapply(abiotic_factors, function(x) paste(x, collapse = "; "))
+  ) %>%
+  select(
+    id, title, abstract_clean,
+    fusarium_species_str, crop_str, abiotic_factors_str,
+    modeling, summary
+  )
+
+validation_file <- file.path(data_dir, "validation_sample.csv")
+write.csv(validation_export, validation_file, row.names = FALSE)
+
+cat("✓ Validation template saved:", validation_file, "\n")
+cat("  Open in spreadsheet software for annotation\n")
+```
+
+**Result**: Validation template exported for manual annotation.
+
+## Summary
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║        MANUAL VALIDATION SETUP COMPLETE            ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Manual Validation Workflow:\n")
+cat("  1. Open:", validation_file, "\n")
+cat("  2. For each row, verify extracted data against abstract\n")
+cat("  3. Add columns: species_correct, crop_correct, etc.\n")
+cat("  4. Mark as: 1 (correct), 0.5 (partial), 0 (incorrect)\n")
+cat("  5. Calculate accuracy: mean(species_correct)\n")
+cat("  6. Identify patterns in errors\n")
+cat("  7. Refine prompts if needed\n\n")
+
+cat("Next: Aggregate results in `0520_aggregate_results.Rmd`\n")
+```
+
+**Result**: Manual validation process established.
+
+## Next Steps
+
+1. ✓ Selected validation sample
+2. ✓ Created validation template
+3. TODO: Manual annotation (student task)
+4. TODO: Calculate accuracy metrics
+5. Next: Aggregate all results in `0520_aggregate_results.Rmd`

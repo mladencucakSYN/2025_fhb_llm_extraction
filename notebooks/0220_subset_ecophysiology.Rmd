@@ -1,0 +1,95 @@
+---
+title: "Subset to Ecophysiology Topics"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Filtering to Relevant Topics
+
+This notebook filters the full dataset to studies focused on ecophysiology and abiotic responses, reducing the corpus for targeted extraction.
+
+```{r load-packages}
+library(dplyr)
+library(ggplot2)
+library(readr)
+
+data_dir <- "../data/fusarium"
+```
+
+**Result**: Ready for data filtering.
+
+## Load Data and Topic Assignments
+
+```{r load-data}
+fusarium_data <- readRDS(file.path(data_dir, "fusarium_studies_extraction_ready.rds"))
+topic_assignments <- readRDS(file.path(data_dir, "topic_assignments_k20.rds"))
+topic_labels <- read_csv(file.path(data_dir, "topic_labels.csv"))
+
+cat("✓ Data loaded\n")
+cat("  Total studies:", nrow(fusarium_data), "\n")
+```
+
+**Result**: Full dataset and topic assignments loaded.
+
+## Identify Ecophysiology Studies
+
+Filter to studies where the dominant topic is in the ecophysiology macro-theme.
+
+```{r filter-ecophysiology}
+# Ecophysiology topics: 2, 5, 8, 10, 11, 13
+ecophys_topics <- c(2, 5, 8, 10, 11, 13)
+
+ecophys_studies <- topic_assignments %>%
+  filter(topic %in% ecophys_topics) %>%
+  left_join(topic_labels %>% select(topic, label, macro_theme), by = "topic")
+
+cat("\nEcophysiology Subset:\n")
+cat("  Studies selected:", nrow(ecophys_studies), "\n")
+cat("  Reduction:", round((1 - nrow(ecophys_studies)/nrow(fusarium_data)) * 100, 1), "%\n")
+
+# Distribution across ecophysiology topics
+topic_dist <- ecophys_studies %>%
+  count(topic, label, sort = TRUE)
+
+print(topic_dist)
+```
+
+**Result**: Dataset reduced to ecophysiology-focused studies.
+
+## Visualize Topic Distribution
+
+```{r visualize-distribution}
+ggplot(topic_dist, aes(x = reorder(label, n), y = n)) +
+  geom_col(fill = "darkgreen", alpha = 0.7) +
+  geom_text(aes(label = n), hjust = -0.2) +
+  coord_flip() +
+  labs(
+    title = "Studies per Ecophysiology Topic",
+    x = "Topic",
+    y = "Number of Studies"
+  ) +
+  theme_minimal()
+```
+
+**Result**: Distribution shows topic balance within ecophysiology subset.
+
+## Save Filtered Dataset
+
+```{r save-filtered}
+ecophys_file <- file.path(data_dir, "fusarium_ecophysiology_subset.rds")
+saveRDS(ecophys_studies, ecophys_file)
+
+cat("✓ Ecophysiology subset saved:", ecophys_file, "\n")
+cat("  This dataset will be used for LLM extraction\n")
+```
+
+**Result**: Filtered dataset saved for extraction pipeline.
+
+## Next Steps
+
+1. ✓ Filtered to ecophysiology topics (2, 5, 8, 10, 11, 13)
+2. ✓ Reduced dataset size for focused extraction
+3. Next: Create test sample in `0230_create_test_sample.Rmd`

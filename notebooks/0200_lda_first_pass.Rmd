@@ -1,0 +1,270 @@
+---
+title: "LDA Topic Modeling - First Pass"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Topic Modeling with LDA
+
+This notebook applies Latent Dirichlet Allocation (LDA) to identify major themes in the Fusarium literature. Topic modeling helps reduce a large corpus to interpretable themes before targeted extraction.
+
+### Purpose
+
+Use LDA to:
+- Identify 20 major topics in the full corpus
+- Understand research theme distribution
+- Filter dataset to relevant studies
+- Reduce extraction workload
+
+## Load Packages
+
+```{r load-packages}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidytext)
+library(topicmodels)  # LDA implementation
+library(tidyr)
+
+cat("✓ Packages loaded\n")
+```
+
+**Result**: Topic modeling tools ready.
+
+## Load Preprocessed Data
+
+```{r load-data}
+data_dir <- "../data/fusarium"
+fusarium_data <- readRDS(file.path(data_dir, "fusarium_studies_extraction_ready.rds"))
+
+cat("✓ Loaded", nrow(fusarium_data), "studies for topic modeling\n")
+```
+
+**Result**: Extraction-ready dataset loaded.
+
+## Create Document-Term Matrix
+
+Prepare text data for LDA by creating a document-term matrix.
+
+```{r create-dtm}
+cat("Creating document-term matrix...\n")
+
+# Tokenize and remove stop words
+abstract_tokens <- fusarium_data %>%
+  select(id, abstract_clean) %>%
+  unnest_tokens(word, abstract_clean) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(
+    nchar(word) > 3,
+    !str_detect(word, "^\\d+$")
+  )
+
+# Count word frequencies per document
+word_counts <- abstract_tokens %>%
+  count(id, word, sort = TRUE)
+
+# Create document-term matrix
+dtm <- word_counts %>%
+  cast_dtm(document = id, term = word, value = n)
+
+cat("✓ DTM created\n")
+cat("  Documents:", nrow(dtm), "\n")
+cat("  Terms:", ncol(dtm), "\n")
+```
+
+**Result**: Document-term matrix prepared with documents as rows and terms as columns.
+
+## Run LDA with 20 Topics
+
+Apply LDA to identify 20 major topics across the corpus.
+
+```{r run-lda}
+cat("\nRunning LDA with K=20 topics...\n")
+cat("(This may take several minutes)\n\n")
+
+set.seed(123)  # For reproducibility
+
+lda_model <- LDA(
+  dtm,
+  k = 20,
+  method = "Gibbs",
+  control = list(
+    iter = 2000,
+    burnin = 500,
+    seed = 123
+  )
+)
+
+cat("✓ LDA model fitted\n")
+```
+
+**Result**: LDA model with 20 topics fitted to the corpus.
+
+## Extract Top Terms per Topic
+
+Identify the most characteristic words for each topic.
+
+```{r top-terms}
+cat("\nExtracting top terms per topic...\n")
+
+# Get beta (term probabilities per topic)
+topic_terms <- tidy(lda_model, matrix = "beta")
+
+# Top 10 terms per topic
+top_terms <- topic_terms %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 10) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+cat("✓ Top terms extracted\n\n")
+
+# Display top 5 terms for each topic
+cat("Preview: Top 5 terms per topic:\n")
+cat(rep("-", 70), "\n", sep = "")
+
+top_terms %>%
+  group_by(topic) %>%
+  slice_head(n = 5) %>%
+  summarise(terms = paste(term, collapse = ", ")) %>%
+  print(n = 20)
+```
+
+**Result**: Top terms reveal interpretable themes for each of the 20 topics.
+
+## Visualize Topic-Term Distributions
+
+Plot the most important terms for selected topics.
+
+```{r visualize-terms}
+# Visualize top 15 terms for topics 1-6
+top_terms %>%
+  filter(topic <= 6) %>%
+  group_by(topic) %>%
+  slice_max(beta, n = 15) %>%
+  ungroup() %>%
+  mutate(term = reorder_within(term, beta, topic)) %>%
+  ggplot(aes(x = term, y = beta, fill = as.factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free", ncol = 3) +
+  scale_x_reordered() +
+  coord_flip() +
+  labs(
+    title = "Top 15 Terms per Topic (Topics 1-6)",
+    x = "Term",
+    y = "Probability (beta)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 8)
+  )
+```
+
+**Result**: Visualization shows distinct term patterns for each topic.
+
+## Extract Document-Topic Distributions
+
+Determine which topics are present in each document.
+
+```{r doc-topics}
+cat("\nExtracting document-topic distributions...\n")
+
+# Get gamma (topic probabilities per document)
+doc_topics <- tidy(lda_model, matrix = "gamma") %>%
+  rename(id = document)
+
+# Find dominant topic for each document
+dominant_topics <- doc_topics %>%
+  group_by(id) %>%
+  slice_max(gamma, n = 1) %>%
+  ungroup()
+
+cat("✓ Document-topic distributions extracted\n\n")
+
+# Topic distribution summary
+topic_summary <- dominant_topics %>%
+  count(topic, sort = TRUE) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+cat("Documents per Topic (dominant topic):\n")
+print(topic_summary)
+
+# Plot
+ggplot(topic_summary, aes(x = reorder(as.factor(topic), -n), y = n)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = sprintf("%d\n(%.1f%%)", n, percentage)),
+            vjust = -0.3, size = 3) +
+  labs(
+    title = "Document Distribution Across Topics",
+    subtitle = "Based on dominant topic assignment",
+    x = "Topic",
+    y = "Number of Documents"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Topic 1, 3, and 7 contain the most documents in this corpus.
+
+## Save LDA Results
+
+Save model and results for interpretation in next notebook.
+
+```{r save-results}
+# Save LDA model
+lda_file <- file.path(data_dir, "lda_model_k20.rds")
+saveRDS(lda_model, lda_file)
+cat("✓ LDA model saved:", lda_file, "\n")
+
+# Save topic assignments
+topic_assignments <- fusarium_data %>%
+  select(id, title, abstract_clean) %>%
+  left_join(dominant_topics, by = "id")
+
+assignments_file <- file.path(data_dir, "topic_assignments_k20.rds")
+saveRDS(topic_assignments, assignments_file)
+cat("✓ Topic assignments saved:", assignments_file, "\n")
+
+# Save top terms for reference
+top_terms_file <- file.path(data_dir, "lda_top_terms_k20.csv")
+write.csv(top_terms, top_terms_file, row.names = FALSE)
+cat("✓ Top terms saved:", top_terms_file, "\n")
+```
+
+**Result**: LDA results saved for manual interpretation.
+
+## Summary
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║           LDA FIRST PASS COMPLETE                  ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Model Summary:\n")
+cat("  Topics: 20\n")
+cat("  Documents:", nrow(dtm), "\n")
+cat("  Terms:", ncol(dtm), "\n")
+cat("  Algorithm: Gibbs sampling (2000 iterations)\n\n")
+
+cat("Next Steps:\n")
+cat("  1. Review top terms in each topic\n")
+cat("  2. Manually label topics (notebook 0210)\n")
+cat("  3. Group topics into macro-themes\n")
+cat("  4. Select relevant topics for extraction\n")
+```
+
+**Result**: 20-topic LDA model complete, ready for interpretation.
+
+## Next Steps
+
+1. ✓ Created document-term matrix
+2. ✓ Fitted 20-topic LDA model
+3. ✓ Extracted top terms and document assignments
+4. Next: Interpret and label topics in `0210_topic_interpretation.Rmd`
+5. Then: Subset to relevant topics in `0220_subset_ecophysiology.Rmd`

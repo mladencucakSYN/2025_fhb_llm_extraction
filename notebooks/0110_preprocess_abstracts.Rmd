@@ -1,0 +1,419 @@
+---
+title: "Preprocess Abstracts for Extraction"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Text Preprocessing
+
+This notebook preprocesses the Fusarium study abstracts for extraction. Proper text cleaning ensures consistent and reliable extraction results.
+
+### Purpose
+
+Prepare text data for LLM extraction by:
+- Cleaning and normalizing text
+- Combining title, abstract, and keywords
+- Removing problematic characters
+- Creating standardized text fields
+
+## Load Packages
+
+Load required packages for text processing.
+
+```{r load-packages}
+library(dplyr)
+library(stringr)
+library(readr)
+
+# Load project functions
+source("../R/utils.R")
+
+cat("✓ Packages loaded\n")
+```
+
+**Result**: Text processing packages ready.
+
+## Load Data
+
+Load the Fusarium dataset from the previous notebook.
+
+```{r load-data}
+data_dir <- "../data/fusarium"
+data_file <- file.path(data_dir, "fusarium_studies_loaded.rds")
+
+fusarium_data <- readRDS(data_file)
+
+cat("✓ Loaded", nrow(fusarium_data), "studies\n")
+```
+
+**Result**: Dataset loaded from previous processing step.
+
+## Inspect Raw Text
+
+Examine examples of raw abstract text before cleaning.
+
+```{r inspect-raw}
+cat("Sample Abstract (Raw):\n")
+cat(rep("-", 70), "\n", sep = "")
+cat(fusarium_data$abstract[1], "\n")
+cat(rep("-", 70), "\n\n", sep = "")
+
+# Check for problematic characters
+cat("Text Issues to Address:\n")
+cat("  - Newlines: ", sum(str_detect(fusarium_data$abstract, "\n"), na.rm = TRUE), "abstracts\n")
+cat("  - Tabs: ", sum(str_detect(fusarium_data$abstract, "\t"), na.rm = TRUE), "abstracts\n")
+cat("  - Multiple spaces: ", sum(str_detect(fusarium_data$abstract, "  +"), na.rm = TRUE), "abstracts\n")
+cat("  - Non-ASCII: ", sum(str_detect(fusarium_data$abstract, "[^ -~]"), na.rm = TRUE), "abstracts\n")
+```
+
+**Result**: Raw text characteristics identified for cleaning.
+
+## Clean Text Function
+
+Define comprehensive text cleaning function.
+
+```{r clean-function}
+clean_abstract_text <- function(text) {
+  if (is.na(text) || nchar(text) == 0) {
+    return("")
+  }
+
+  text %>%
+    # Remove newlines and tabs
+    str_replace_all("[\r\n\t]+", " ") %>%
+    # Remove multiple spaces
+    str_replace_all("\\s+", " ") %>%
+    # Remove leading/trailing whitespace
+    str_trim() %>%
+    # Remove special characters that might confuse LLMs
+    str_replace_all("[\u2018\u2019]", "'") %>%  # Smart quotes to straight quotes
+    str_replace_all("[\u201c\u201d]", '"') %>%   # Smart quotes to straight quotes
+    str_replace_all("\u2013|\u2014", "-") %>%    # En/em dashes to hyphens
+    # Remove control characters
+    str_remove_all("[[:cntrl:]]")
+}
+
+cat("✓ Text cleaning function defined\n")
+```
+
+**Result**: Cleaning function ready to normalize text.
+
+## Apply Text Cleaning
+
+Clean all text fields in the dataset.
+
+```{r apply-cleaning}
+cat("Cleaning text fields...\n")
+
+fusarium_data <- fusarium_data %>%
+  mutate(
+    title_clean = clean_abstract_text(title),
+    abstract_clean = clean_abstract_text(abstract),
+    keywords_clean = clean_abstract_text(keywords)
+  )
+
+cat("✓ Text fields cleaned\n")
+
+# Show before/after example
+cat("\nExample - Before Cleaning:\n")
+cat(substr(fusarium_data$abstract[1], 1, 150), "...\n\n")
+
+cat("Example - After Cleaning:\n")
+cat(substr(fusarium_data$abstract_clean[1], 1, 150), "...\n")
+```
+
+**Result**: All text fields cleaned and normalized.
+
+## Combine Text Fields
+
+Create combined text field with title, abstract, and keywords for extraction.
+
+```{r combine-text}
+cat("Combining text fields...\n")
+
+fusarium_data <- fusarium_data %>%
+  mutate(
+    combined_text = paste(
+      ifelse(nchar(title_clean) > 0, paste("Title:", title_clean), ""),
+      ifelse(nchar(abstract_clean) > 0, paste("Abstract:", abstract_clean), ""),
+      ifelse(nchar(keywords_clean) > 0, paste("Keywords:", keywords_clean), ""),
+      sep = "\n\n"
+    ),
+    combined_text = str_trim(combined_text),
+    combined_length = nchar(combined_text)
+  )
+
+cat("✓ Combined text created\n")
+
+# Show example
+cat("\nExample Combined Text:\n")
+cat(rep("-", 70), "\n", sep = "")
+cat(substr(fusarium_data$combined_text[1], 1, 300), "...\n")
+cat(rep("-", 70), "\n", sep = "")
+```
+
+**Result**: Title, abstract, and keywords combined into single extraction-ready text.
+
+## Handle Missing Text
+
+Identify and handle records with missing or insufficient text.
+
+```{r handle-missing}
+cat("Checking for missing/insufficient text...\n\n")
+
+# Identify problematic records
+fusarium_data <- fusarium_data %>%
+  mutate(
+    has_title = nchar(title_clean) > 0,
+    has_abstract = nchar(abstract_clean) > 0,
+    has_keywords = nchar(keywords_clean) > 0,
+    has_sufficient_text = combined_length >= 50  # At least 50 characters
+  )
+
+# Summary
+missing_summary <- fusarium_data %>%
+  summarise(
+    missing_title = sum(!has_title),
+    missing_abstract = sum(!has_abstract),
+    missing_keywords = sum(!has_keywords),
+    insufficient_text = sum(!has_sufficient_text)
+  )
+
+cat("Missing Text Summary:\n")
+cat(rep("-", 50), "\n", sep = "")
+print(missing_summary)
+cat(rep("-", 50), "\n\n", sep = "")
+
+# Flag records to exclude
+fusarium_data <- fusarium_data %>%
+  mutate(
+    exclude_from_extraction = !has_abstract | !has_sufficient_text
+  )
+
+n_excluded <- sum(fusarium_data$exclude_from_extraction)
+n_valid <- sum(!fusarium_data$exclude_from_extraction)
+
+cat("Extraction Eligibility:\n")
+cat("  Valid for extraction: ", n_valid, "\n")
+cat("  Excluded (missing/insufficient): ", n_excluded, "\n")
+
+if (n_excluded > 0) {
+  cat("\n⚠ ", n_excluded, " records will be excluded from extraction\n")
+}
+```
+
+**Result**: Records with insufficient text identified and flagged for exclusion.
+
+## Text Length Analysis
+
+Analyze the distribution of combined text lengths.
+
+```{r length-analysis}
+cat("\nCombined Text Length Statistics:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+length_stats <- fusarium_data %>%
+  filter(!exclude_from_extraction) %>%
+  summarise(
+    min = min(combined_length),
+    q25 = quantile(combined_length, 0.25),
+    median = median(combined_length),
+    mean = mean(combined_length),
+    q75 = quantile(combined_length, 0.75),
+    max = max(combined_length)
+  )
+
+print(length_stats)
+
+# Plot distribution
+library(ggplot2)
+
+fusarium_data %>%
+  filter(!exclude_from_extraction) %>%
+  ggplot(aes(x = combined_length)) +
+  geom_histogram(bins = 40, fill = "skyblue", alpha = 0.7) +
+  geom_vline(aes(xintercept = median(combined_length)),
+             color = "red", linetype = "dashed", size = 1) +
+  labs(
+    title = "Distribution of Combined Text Lengths",
+    subtitle = "Red line = median length",
+    x = "Text Length (characters)",
+    y = "Number of Studies"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+**Result**: Most combined texts are 1500-2500 characters, suitable for LLM context windows.
+
+## Token Estimation
+
+Estimate token counts for LLM API cost estimation.
+
+```{r token-estimation}
+cat("\nToken Estimation (approximate):\n")
+cat(rep("-", 50), "\n", sep = "")
+
+# Rough estimate: 1 token ≈ 4 characters for English text
+fusarium_data <- fusarium_data %>%
+  mutate(
+    estimated_tokens = ceiling(combined_length / 4)
+  )
+
+token_stats <- fusarium_data %>%
+  filter(!exclude_from_extraction) %>%
+  summarise(
+    total_tokens = sum(estimated_tokens),
+    mean_tokens = mean(estimated_tokens),
+    median_tokens = median(estimated_tokens)
+  )
+
+cat("Estimated tokens per study:\n")
+cat("  Mean: ", round(token_stats$mean_tokens), "\n")
+cat("  Median: ", round(token_stats$median_tokens), "\n\n")
+
+cat("Total estimated tokens: ", format(token_stats$total_tokens, big.mark = ","), "\n")
+cat("  (for", sum(!fusarium_data$exclude_from_extraction), "valid studies)\n")
+```
+
+**Result**: Token estimates calculated for cost planning.
+
+## Create Text Quality Metrics
+
+Add quality indicators for each record.
+
+```{r quality-metrics}
+cat("\nCalculating text quality metrics...\n")
+
+fusarium_data <- fusarium_data %>%
+  mutate(
+    # Word count
+    word_count = str_count(combined_text, "\\S+"),
+
+    # Sentence count (rough estimate)
+    sentence_count = str_count(combined_text, "[.!?]+"),
+
+    # Contains key terms
+    mentions_fusarium = str_detect(combined_text, regex("fusarium", ignore_case = TRUE)),
+    mentions_wheat = str_detect(combined_text, regex("wheat|barley|oat|cereal", ignore_case = TRUE)),
+    mentions_climate = str_detect(combined_text, regex("climate|temperature|moisture|humidity", ignore_case = TRUE)),
+
+    # Quality score (0-3 based on key terms)
+    quality_score = as.integer(mentions_fusarium) +
+                    as.integer(mentions_wheat) +
+                    as.integer(mentions_climate)
+  )
+
+cat("✓ Quality metrics calculated\n\n")
+
+# Summary
+quality_summary <- fusarium_data %>%
+  filter(!exclude_from_extraction) %>%
+  summarise(
+    mentions_fusarium_pct = mean(mentions_fusarium) * 100,
+    mentions_wheat_pct = mean(mentions_wheat) * 100,
+    mentions_climate_pct = mean(mentions_climate) * 100,
+    mean_quality_score = mean(quality_score)
+  )
+
+cat("Quality Indicators:\n")
+cat(rep("-", 50), "\n", sep = "")
+cat("  Mentions Fusarium: ", round(quality_summary$mentions_fusarium_pct, 1), "%\n")
+cat("  Mentions cereals: ", round(quality_summary$mentions_wheat_pct, 1), "%\n")
+cat("  Mentions climate: ", round(quality_summary$mentions_climate_pct, 1), "%\n")
+cat("  Mean quality score: ", round(quality_summary$mean_quality_score, 2), "/3\n")
+cat(rep("-", 50), "\n", sep = "")
+```
+
+**Result**: Quality metrics indicate relevance of studies to research question.
+
+## Create Processing Summary
+
+Generate summary statistics for documentation.
+
+```{r processing-summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║        TEXT PREPROCESSING COMPLETE                 ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Processing Summary:\n")
+cat(rep("-", 50), "\n", sep = "")
+cat("Total records: ", nrow(fusarium_data), "\n")
+cat("Valid for extraction: ", sum(!fusarium_data$exclude_from_extraction), "\n")
+cat("Excluded: ", sum(fusarium_data$exclude_from_extraction), "\n")
+cat("Mean text length: ", round(mean(fusarium_data$combined_length[!fusarium_data$exclude_from_extraction])), " chars\n")
+cat("Estimated tokens: ", format(sum(fusarium_data$estimated_tokens[!fusarium_data$exclude_from_extraction]), big.mark = ","), "\n")
+cat(rep("-", 50), "\n", sep = "")
+
+cat("\n✓ Data ready for exploratory analysis (notebook 0120)\n")
+```
+
+**Result**: Preprocessing complete with documented statistics.
+
+## Save Preprocessed Data
+
+Save the cleaned and enhanced dataset.
+
+```{r save-preprocessed}
+# Save full dataset
+processed_file <- file.path(data_dir, "fusarium_studies_preprocessed.rds")
+saveRDS(fusarium_data, processed_file)
+cat("✓ Preprocessed data saved to:", processed_file, "\n")
+
+# Save extraction-ready subset
+valid_data <- fusarium_data %>%
+  filter(!exclude_from_extraction)
+
+valid_file <- file.path(data_dir, "fusarium_studies_extraction_ready.rds")
+saveRDS(valid_data, valid_file)
+cat("✓ Extraction-ready subset saved to:", valid_file, "\n")
+
+# Export summary
+summary_data <- fusarium_data %>%
+  select(id, title, combined_length, word_count, quality_score,
+         exclude_from_extraction, mentions_fusarium, mentions_wheat, mentions_climate)
+
+summary_file <- file.path(data_dir, "preprocessing_summary.csv")
+write_csv(summary_data, summary_file)
+cat("✓ Summary exported to:", summary_file, "\n")
+```
+
+**Result**: Preprocessed data saved in multiple formats for downstream use.
+
+## Next Steps
+
+1. ✓ Loaded raw Fusarium data
+2. ✓ Cleaned and normalized text
+3. ✓ Combined title, abstract, keywords
+4. ✓ Calculated quality metrics
+5. Next: Exploratory analysis in `0120_exploratory_analysis.Rmd`
+6. Then: Topic modeling in `0200_lda_first_pass.Rmd`
+
+## Text Preprocessing Best Practices
+
+Key lessons from this notebook:
+
+### Always Clean Text
+- Remove control characters and special formatting
+- Normalize whitespace and quotes
+- Preserve scientific notation and special symbols
+
+### Combine Relevant Fields
+- Title provides context
+- Abstract contains main content
+- Keywords highlight key concepts
+
+### Document Exclusions
+- Flag rather than delete problematic records
+- Document reasons for exclusion
+- Allow manual review if needed
+
+### Calculate Quality Metrics
+- Estimate tokens for cost planning
+- Check for key terms to verify relevance
+- Assess text sufficiency for extraction

@@ -1,0 +1,148 @@
+---
+title: "Aggregate Extraction Results"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Aggregating Extraction Results
+
+This notebook aggregates all extraction results into analysis-ready datasets for research use.
+
+```{r load-packages}
+library(dplyr)
+library(tidyr)
+library(readr)
+
+data_dir <- "../data/fusarium"
+```
+
+**Result**: Ready for aggregation.
+
+## Load All Extractions
+
+```{r load-data}
+all_results <- readRDS(file.path(data_dir, "batch_extraction_results_demo.rds"))
+
+cat("✓ Loaded", nrow(all_results), "extraction results\n")
+```
+
+**Result**: All extraction results loaded.
+
+## Create Analysis Datasets
+
+Generate different views of the data for various analyses.
+
+```{r create-datasets}
+# Dataset 1: Document-level summary
+doc_summary <- all_results %>%
+  mutate(
+    n_species = sapply(fusarium_species, length),
+    n_crops = sapply(crop, length),
+    n_abiotic = sapply(abiotic_factors, length),
+    n_mycotoxins = sapply(mycotoxins, length),
+    n_practices = sapply(agronomic_practices, length),
+    has_data = n_species > 0 | n_crops > 0 | n_abiotic > 0
+  )
+
+cat("\nDocument-Level Summary:\n")
+cat("  Total documents:", nrow(doc_summary), "\n")
+cat("  With species:", sum(doc_summary$n_species > 0), "\n")
+cat("  With crops:", sum(doc_summary$n_crops > 0), "\n")
+cat("  With abiotic factors:", sum(doc_summary$n_abiotic > 0), "\n")
+cat("  Modeling studies:", sum(doc_summary$modeling), "\n")
+
+# Dataset 2: Flattened species×crop combinations
+species_crop <- all_results %>%
+  select(id, fusarium_species, crop) %>%
+  unnest(fusarium_species) %>%
+  unnest(crop) %>%
+  mutate(
+    fusarium_species = tolower(fusarium_species),
+    crop = tolower(crop)
+  )
+
+if (nrow(species_crop) > 0) {
+  cat("\nSpecies × Crop Combinations:\n")
+  cat("  Total combinations:", nrow(species_crop), "\n")
+  cat("  Unique species:", length(unique(species_crop$fusarium_species)), "\n")
+  cat("  Unique crops:", length(unique(species_crop$crop)), "\n")
+}
+
+# Dataset 3: Abiotic factors frequency
+abiotic_flat <- all_results %>%
+  select(id, abiotic_factors) %>%
+  unnest(abiotic_factors) %>%
+  mutate(abiotic_factors = tolower(abiotic_factors))
+
+if (nrow(abiotic_flat) > 0) {
+  abiotic_counts <- abiotic_flat %>%
+    count(abiotic_factors, sort = TRUE)
+
+  cat("\nTop Abiotic Factors:\n")
+  print(head(abiotic_counts, 10))
+}
+```
+
+**Result**: Multiple analysis-ready datasets created.
+
+## Save Aggregated Datasets
+
+```{r save-datasets}
+# Save document summary
+write_csv(doc_summary, file.path(data_dir, "extraction_summary.csv"))
+cat("\n✓ Saved: extraction_summary.csv\n")
+
+# Save species-crop combinations
+if (nrow(species_crop) > 0) {
+  write_csv(species_crop, file.path(data_dir, "species_crop_combinations.csv"))
+  cat("✓ Saved: species_crop_combinations.csv\n")
+}
+
+# Save abiotic factors
+if (nrow(abiotic_flat) > 0) {
+  write_csv(abiotic_flat, file.path(data_dir, "abiotic_factors_long.csv"))
+  cat("✓ Saved: abiotic_factors_long.csv\n")
+}
+
+# Save complete structured data
+write_rds(all_results, file.path(data_dir, "extraction_results_final.rds"))
+cat("✓ Saved: extraction_results_final.rds\n")
+```
+
+**Result**: All analysis datasets saved for research use.
+
+## Summary
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║        RESULTS AGGREGATION COMPLETE                ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("Analysis-Ready Datasets:\n")
+cat("  1. extraction_summary.csv - Document-level overview\n")
+cat("  2. species_crop_combinations.csv - Species×crop pairs\n")
+cat("  3. abiotic_factors_long.csv - Environmental factors\n")
+cat("  4. extraction_results_final.rds - Complete structured data\n\n")
+
+cat("These datasets can be used for:\n")
+cat("  - Statistical analysis\n")
+cat("  - Data visualization\n")
+cat("  - Meta-analysis\n")
+cat("  - Publication tables/figures\n\n")
+
+cat("Next: Research analysis in `0530_fusarium_analysis.Rmd`\n")
+```
+
+**Result**: All data aggregated and ready for research analysis.
+
+## Next Steps
+
+1. ✓ Aggregated all extractions
+2. ✓ Created multiple analysis views
+3. ✓ Saved analysis-ready datasets
+4. Next: Perform research analysis in `0530_fusarium_analysis.Rmd`

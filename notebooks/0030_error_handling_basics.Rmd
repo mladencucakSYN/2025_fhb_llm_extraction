@@ -1,0 +1,505 @@
+---
+title: "Error Handling and Retry Logic"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## Error Handling for API Calls
+
+This notebook introduces error handling techniques for robust LLM extraction. When working with APIs at scale, errors and rate limits are inevitable. Proper error handling ensures your extraction pipeline can recover from failures.
+
+### Learning Objectives
+
+- Understand common API errors
+- Implement retry logic with exponential backoff
+- Handle rate limits gracefully
+- Build resilient extraction pipelines
+
+## Load Packages and Functions
+
+Load required packages and our custom retry logic functions.
+
+```{r load-packages}
+library(dplyr)
+library(jsonlite)
+
+# Load project functions
+source("../R/gemini_extraction.R")
+source("../R/retry_logic.R")
+
+cat("✓ Packages and functions loaded\n")
+```
+
+**Result**: Error handling functions available for use.
+
+## Common API Errors
+
+Overview of errors encountered when working with LLM APIs.
+
+```{r error-types}
+cat("Common API Errors:\n")
+cat(rep("-", 50), "\n", sep = "")
+cat("\n1. HTTP 429: Rate Limit Exceeded\n")
+cat("   - Too many requests in short time\n")
+cat("   - Solution: Wait and retry with backoff\n\n")
+
+cat("2. HTTP 500: Internal Server Error\n")
+cat("   - Temporary server-side issue\n")
+cat("   - Solution: Retry after short delay\n\n")
+
+cat("3. HTTP 401/403: Authentication Error\n")
+cat("   - Invalid or expired API key\n")
+cat("   - Solution: Check API key configuration\n\n")
+
+cat("4. Network Timeout\n")
+cat("   - Slow connection or server not responding\n")
+cat("   - Solution: Retry with longer timeout\n\n")
+
+cat("5. JSON Parsing Error\n")
+cat("   - Malformed response from LLM\n")
+cat("   - Solution: Validate response, retry if needed\n")
+
+cat(rep("-", 50), "\n", sep = "")
+```
+
+**Result**: Five common error types identified with solutions.
+
+## Exponential Backoff Concept
+
+Exponential backoff increases wait time between retries to avoid overwhelming the API.
+
+```{r backoff-concept}
+cat("Exponential Backoff Strategy:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+base_delay <- 1
+max_attempts <- 5
+
+for (attempt in 1:max_attempts) {
+  delay <- base_delay * (2 ^ (attempt - 1))
+  cat(sprintf("Attempt %d: wait %.0f seconds\n", attempt, delay))
+}
+
+cat(rep("-", 50), "\n", sep = "")
+cat("\nTotal wait time:", sum(base_delay * (2 ^ (0:4))), "seconds\n")
+```
+
+**Result**: Exponential backoff demonstrated with increasing delays: 1s, 2s, 4s, 8s, 16s.
+
+## Test 1: Basic Retry Logic
+
+Test retry function with a simple operation that might fail.
+
+```{r test-basic-retry}
+cat("\n=== Test 1: Basic Retry ===\n\n")
+
+# Simulate a function that fails sometimes
+attempt_count <- 0
+
+flaky_function <- function() {
+  attempt_count <<- attempt_count + 1
+
+  if (attempt_count < 3) {
+    stop("Simulated error - attempt ", attempt_count)
+  }
+
+  return("Success!")
+}
+
+# Reset counter
+attempt_count <- 0
+
+# Try with retry logic
+result <- retry_with_backoff({
+  flaky_function()
+}, max_attempts = 5, base_delay = 0.5)
+
+cat("\n✓ Final result:", result, "\n")
+cat("  Total attempts needed:", attempt_count, "\n")
+```
+
+**Result**: Retry logic successfully recovered from temporary failures after 3 attempts.
+
+## Test 2: Rate Limit Simulation
+
+Simulate rate limit errors and demonstrate recovery with exponential backoff.
+
+```{r test-rate-limit}
+cat("\n=== Test 2: Rate Limit Simulation ===\n\n")
+
+# Track API calls
+call_times <- numeric()
+
+# Simulate rate-limited API
+rate_limited_api <- function() {
+  current_time <- as.numeric(Sys.time())
+  call_times <<- c(call_times, current_time)
+
+  # Check if too many calls in last 5 seconds
+  recent_calls <- sum(call_times > (current_time - 5))
+
+  if (recent_calls > 2) {
+    stop("HTTP 429: Rate limit exceeded")
+  }
+
+  return(list(status = "success", data = "API response"))
+}
+
+# Reset call times
+call_times <- numeric()
+
+# Make multiple calls with retry
+results <- list()
+for (i in 1:5) {
+  cat(sprintf("Making call %d...\n", i))
+
+  result <- retry_with_backoff({
+    rate_limited_api()
+  }, max_attempts = 3, base_delay = 1)
+
+  results[[i]] <- result
+  cat(sprintf("  ✓ Call %d succeeded\n\n", i))
+}
+
+cat("All calls completed successfully\n")
+```
+
+**Result**: Retry logic handled simulated rate limits by waiting between calls.
+
+## Test 3: Safe Extraction Wrapper
+
+Test the safe_extract function that catches errors and continues processing.
+
+```{r test-safe-extract}
+cat("\n=== Test 3: Safe Extraction ===\n\n")
+
+# Sample texts to process (some will cause errors)
+test_texts <- c(
+  "Normal text to extract from",
+  "",  # Empty text - might cause issues
+  "Another normal text",
+  NA,  # NA value - will cause error
+  "Final text"
+)
+
+# Dummy extraction function that fails on empty/NA
+dummy_extract <- function(text) {
+  if (is.na(text) || nchar(text) == 0) {
+    stop("Cannot extract from empty text")
+  }
+  return(list(text = text, length = nchar(text)))
+}
+
+# Process all texts with safe extraction
+results <- list()
+for (i in seq_along(test_texts)) {
+  result <- safe_extract(
+    extract_fn = dummy_extract,
+    doc_id = i,
+    text = test_texts[i],
+    verbose = TRUE
+  )
+
+  if (!is.null(result)) {
+    results[[i]] <- result
+  }
+}
+
+cat("\n✓ Processed", length(test_texts), "texts\n")
+cat("  Successful:", length(results), "\n")
+cat("  Failed:", length(test_texts) - length(results), "\n")
+```
+
+**Result**: Safe extraction continued processing despite errors, collecting all successful results.
+
+## Test 4: Real API with Retry
+
+Test retry logic with actual Gemini API calls.
+
+```{r test-real-api}
+cat("\n=== Test 4: Real API with Retry ===\n\n")
+
+# Simple extraction function
+extract_with_retry <- function(text) {
+  retry_with_backoff({
+    prompt <- sprintf('Extract the main topic from this text in 3 words: "%s"', text)
+    simple_gemini(prompt)
+  }, max_attempts = 3, base_delay = 2)
+}
+
+# Test texts
+test_texts <- c(
+  "Climate change affects global agriculture",
+  "Machine learning improves medical diagnosis",
+  "Renewable energy reduces carbon emissions"
+)
+
+# Extract with retry protection
+cat("Extracting with retry protection...\n\n")
+for (i in seq_along(test_texts)) {
+  cat(sprintf("Text %d: %s\n", i, test_texts[i]))
+
+  result <- tryCatch({
+    extract_with_retry(test_texts[i])
+  }, error = function(e) {
+    cat("  ✗ Failed after all retries\n")
+    NULL
+  })
+
+  if (!is.null(result)) {
+    cat("  ✓ Extracted:", result, "\n")
+  }
+
+  cat("\n")
+  Sys.sleep(1)  # Respectful delay between calls
+}
+
+cat("Real API extraction complete\n")
+```
+
+**Result**: Successfully extracted information from all texts with retry protection against transient failures.
+
+## Build Resilient Extraction Function
+
+Combine all error handling techniques into a production-ready extraction function.
+
+```{r resilient-extraction}
+# Resilient extraction function
+resilient_extract <- function(texts,
+                              extract_fn,
+                              max_attempts = 3,
+                              delay_between = 2) {
+
+  n_texts <- length(texts)
+  results <- list()
+  errors <- list()
+
+  cat(sprintf("Processing %d texts with resilient extraction\n", n_texts))
+  cat(rep("-", 50), "\n", sep = "")
+
+  for (i in seq_along(texts)) {
+    cat(sprintf("[%d/%d] ", i, n_texts))
+
+    result <- tryCatch({
+      retry_with_backoff({
+        extract_fn(texts[i])
+      }, max_attempts = max_attempts, base_delay = 1)
+    }, error = function(e) {
+      errors[[i]] <<- conditionMessage(e)
+      NULL
+    })
+
+    if (!is.null(result)) {
+      results[[i]] <- result
+      cat("✓\n")
+    } else {
+      cat("✗\n")
+    }
+
+    # Respectful delay between texts
+    if (i < n_texts) {
+      Sys.sleep(delay_between)
+    }
+  }
+
+  cat(rep("-", 50), "\n", sep = "")
+  cat(sprintf("\nCompleted: %d/%d successful (%.1f%%)\n",
+              length(results), n_texts,
+              length(results)/n_texts*100))
+
+  if (length(errors) > 0) {
+    cat("\nErrors encountered:\n")
+    for (i in seq_along(errors)) {
+      if (!is.null(errors[[i]])) {
+        cat(sprintf("  Text %d: %s\n", i, errors[[i]]))
+      }
+    }
+  }
+
+  list(
+    results = results,
+    errors = errors,
+    success_rate = length(results) / n_texts
+  )
+}
+
+cat("✓ Resilient extraction function defined\n")
+```
+
+**Result**: Production-ready extraction function created with comprehensive error handling.
+
+## Test Resilient Extraction
+
+Demonstrate the resilient extraction function with sample data.
+
+```{r test-resilient}
+cat("\n=== Test Resilient Extraction ===\n\n")
+
+# Sample scientific abstracts
+abstracts <- c(
+  "This study examined Fusarium graminearum infection in wheat under drought conditions.",
+  "We investigated temperature effects on mycotoxin production in barley.",
+  "Climate models predict increased Fusarium head blight severity."
+)
+
+# Simple extraction function
+extract_keywords <- function(text) {
+  prompt <- sprintf('Extract 3 key scientific terms from: "%s". Return as comma-separated list.', text)
+  simple_gemini(prompt)
+}
+
+# Run resilient extraction
+extraction_results <- resilient_extract(
+  texts = abstracts,
+  extract_fn = extract_keywords,
+  max_attempts = 3,
+  delay_between = 2
+)
+
+cat("\nExtraction Results:\n")
+for (i in seq_along(extraction_results$results)) {
+  if (!is.null(extraction_results$results[[i]])) {
+    cat(sprintf("  %d: %s\n", i, extraction_results$results[[i]]))
+  }
+}
+```
+
+**Result**: Resilient extraction successfully processed all texts with automatic error recovery.
+
+## Error Handling Best Practices
+
+Summary of best practices for production extraction pipelines.
+
+```{r best-practices}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║         ERROR HANDLING BEST PRACTICES              ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("1. Always Use Retry Logic\n")
+cat("   - Implement exponential backoff\n")
+cat("   - Set reasonable max_attempts (3-5)\n")
+cat("   - Base delay: 1-2 seconds\n\n")
+
+cat("2. Respect Rate Limits\n")
+cat("   - Add delays between requests\n")
+cat("   - Process in small batches\n")
+cat("   - Monitor success rates\n\n")
+
+cat("3. Log All Errors\n")
+cat("   - Save error messages\n")
+cat("   - Track which documents failed\n")
+cat("   - Enable debugging later\n\n")
+
+cat("4. Fail Gracefully\n")
+cat("   - Don't stop entire pipeline on single error\n")
+cat("   - Collect partial results\n")
+cat("   - Retry failed items later\n\n")
+
+cat("5. Monitor Performance\n")
+cat("   - Track success rate\n")
+cat("   - Measure API latency\n")
+cat("   - Detect degradation early\n")
+
+cat(rep("-", 56), "\n", sep = "")
+```
+
+**Result**: Five key best practices established for production-scale extraction.
+
+## Rate Limit Guidelines
+
+Practical guidelines for avoiding rate limit errors with Gemini API.
+
+```{r rate-limit-guide}
+cat("\nRate Limit Guidelines:\n")
+cat(rep("-", 50), "\n", sep = "")
+cat("\nGemini Free Tier (approximate):\n")
+cat("  - 60 requests per minute\n")
+cat("  - 1,500 requests per day\n\n")
+
+cat("Safe Processing Rates:\n")
+cat("  - Conservative: 10 docs/min (6 sec delay)\n")
+cat("  - Moderate: 20 docs/min (3 sec delay)\n")
+cat("  - Aggressive: 40 docs/min (1.5 sec delay)\n\n")
+
+cat("For 2,663 documents:\n")
+cat("  - Conservative: ~4.4 hours\n")
+cat("  - Moderate: ~2.2 hours\n")
+cat("  - Aggressive: ~1.1 hours\n\n")
+
+cat("Recommendation:\n")
+cat("  - Start conservative during testing\n")
+cat("  - Increase speed if no errors\n")
+cat("  - Use caching to avoid reprocessing\n")
+cat(rep("-", 50), "\n", sep = "")
+```
+
+**Result**: Processing time estimates provided for different rate strategies.
+
+## Summary
+
+Key concepts from this notebook.
+
+```{r summary}
+cat("\n")
+cat("╔════════════════════════════════════════════════════╗\n")
+cat("║              CONCEPTS LEARNED                      ║\n")
+cat("╚════════════════════════════════════════════════════╝\n")
+cat("\n")
+
+cat("✓ Exponential Backoff: Wait longer between retries\n")
+cat("✓ Retry Logic: Automatically recover from failures\n")
+cat("✓ Safe Extraction: Continue despite errors\n")
+cat("✓ Rate Limiting: Respect API constraints\n")
+cat("✓ Graceful Degradation: Collect partial results\n")
+cat("✓ Error Logging: Track failures for debugging\n")
+cat("\n")
+
+cat("These techniques are essential for:\n")
+cat("  - Processing large datasets (100s-1000s of docs)\n")
+cat("  - Production extraction pipelines\n")
+  cat("  - Reliable research workflows\n")
+cat("\n")
+
+cat("Next: Apply to real Fusarium research data!\n")
+```
+
+**Result**: Error handling fundamentals established for production-scale extraction work.
+
+## Next Steps
+
+1. ✓ Understand API errors and solutions
+2. ✓ Implement retry logic with exponential backoff
+3. ✓ Build resilient extraction functions
+4. Next: Load real Fusarium data in `0100_load_fusarium_data.Rmd`
+5. Then: Apply these techniques to process 2,663 studies
+
+## Practice Exercises
+
+### Exercise 1: Adjust Retry Parameters
+Modify the retry logic to:
+- Use different base delays (0.5s, 2s, 5s)
+- Try different max_attempts (2, 5, 10)
+- Observe how it affects total wait time
+
+### Exercise 2: Custom Error Handler
+Create a custom error handler that:
+- Saves failed documents to a file
+- Generates an error report
+- Can retry only failed documents
+
+### Exercise 3: Rate Limit Calculator
+Write a function that:
+- Takes number of documents and rate limit
+- Calculates estimated processing time
+- Recommends batch size and delays
+
+### Exercise 4: Test with Failures
+Create a test that:
+- Simulates 20% failure rate
+- Verifies retry logic works
+- Measures impact on total time
