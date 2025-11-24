@@ -38,6 +38,8 @@ The project requires these packages for LLM extraction and analysis.
 ```{r package-list}
 required_packages <- c(
   "ellmer",        # Google Gemini API interface
+  "httr",          # HTTP requests for PubMed/Scopus APIs
+  "xml2",          # XML parsing for PubMed responses
   "dplyr",         # Data manipulation
   "tidyr",         # Data tidying
   "stringr",       # String operations
@@ -54,7 +56,7 @@ cat("Required packages:\n")
 print(required_packages)
 ```
 
-**Result**: List of eleven required packages defined.
+**Result**: List of thirteen required packages defined.
 
 ## Check Installed Packages
 
@@ -129,7 +131,7 @@ if (all(load_success)) {
 
 ## Check API Key Configuration
 
-Verify that the Google Gemini API key is configured.
+Verify that API keys for Gemini, PubMed, and Scopus are configured.
 
 ```{r check-api-key}
 # Load .env file if it exists
@@ -140,27 +142,50 @@ if (file.exists(".env")) {
   cat("⚠ No .env file found in project directory\n")
 }
 
-# Check API key
-api_key <- Sys.getenv("GOOGLE_API_KEY")
-api_key_set <- nchar(api_key) > 0
+# Check all API keys
+google_key <- Sys.getenv("GOOGLE_API_KEY")
+pubmed_key <- Sys.getenv("PUB_MED_API_KEY")
+scopus_key <- Sys.getenv("SCOPUS_API_KEY")
+
+google_set <- nchar(google_key) > 0
+pubmed_set <- nchar(pubmed_key) > 0
+scopus_set <- nchar(scopus_key) > 0
 
 cat("\nAPI Key Status:\n")
 cat(rep("-", 40), "\n", sep = "")
-cat("GOOGLE_API_KEY:", ifelse(api_key_set, "✓ SET", "✗ NOT SET"), "\n")
+cat("GOOGLE_API_KEY:  ", ifelse(google_set, "✓ SET", "✗ NOT SET"), "\n")
+cat("PUB_MED_API_KEY: ", ifelse(pubmed_set, "✓ SET", "✗ NOT SET"), " (optional)\n")
+cat("SCOPUS_API_KEY:  ", ifelse(scopus_set, "✓ SET", "✗ NOT SET"), "\n")
 
-if (api_key_set) {
-  cat("Key length:", nchar(api_key), "characters\n")
-  cat("Key preview:", substr(api_key, 1, 10), "...\n")
-} else {
-  cat("\nTo set up your API key:\n")
-  cat("1. Get a key from: https://makersuite.google.com/app/apikey\n")
-  cat("2. Create a .env file in the project root\n")
-  cat("3. Add: GOOGLE_API_KEY=your_key_here\n")
+if (google_set) {
+  cat("\nGemini API:\n")
+  cat("  Key length:", nchar(google_key), "characters\n")
+  cat("  Key preview:", substr(google_key, 1, 10), "...\n")
 }
+
+if (pubmed_set) {
+  cat("\nPubMed API:\n")
+  cat("  Key length:", nchar(pubmed_key), "characters\n")
+  cat("  Key preview:", substr(pubmed_key, 1, 8), "...\n")
+  cat("  Rate limit: 10 requests/second (with key)\n")
+} else {
+  cat("\nPubMed API: No key (3 requests/second without key)\n")
+}
+
+if (scopus_set) {
+  cat("\nScopus API:\n")
+  cat("  Key length:", nchar(scopus_key), "characters\n")
+  cat("  Key preview:", substr(scopus_key, 1, 8), "...\n")
+}
+
 cat(rep("-", 40), "\n", sep = "")
+cat("\nTo set up API keys, add to .env file:\n")
+cat("  GOOGLE_API_KEY=your_google_key     (required for LLM extraction)\n")
+cat("  PUB_MED_API_KEY=your_pubmed_key    (optional, increases rate limit)\n")
+cat("  SCOPUS_API_KEY=your_scopus_key     (required for Scopus data fetching)\n")
 ```
 
-**Result**: API key configuration status displayed.
+**Result**: All API key configurations displayed.
 
 ## Check Project Directory Structure
 
@@ -206,6 +231,8 @@ Load custom R functions from the R/ directory.
 ```{r source-functions}
 r_files <- c(
   "R/utils.R",
+  "R/pubmed_api.R",
+  "R/scopus_api.R",
   "R/retry_logic.R",
   "R/batch_processor.R",
   "R/cache_manager.R",
@@ -246,23 +273,36 @@ cat("Status Summary:\n")
 cat(rep("-", 40), "\n", sep = "")
 cat("R Version:       ", R.version.string, "\n")
 cat("Packages:        ", ifelse(all(load_success), "✓ All loaded", "⚠ Some failed"), "\n")
-cat("API Key:         ", ifelse(api_key_set, "✓ Configured", "✗ Not set"), "\n")
+cat("Google API:      ", ifelse(google_set, "✓ Configured", "✗ Not set"), "\n")
+cat("PubMed API:      ", ifelse(pubmed_set, "✓ Configured", "○ Optional"), "\n")
+cat("Scopus API:      ", ifelse(scopus_set, "✓ Configured", "✗ Not set"), "\n")
 cat("Directories:     ✓ Ready\n")
 cat("Functions:       ✓ Loaded\n")
 cat(rep("-", 40), "\n", sep = "")
 
-ready_for_work <- all(load_success) && api_key_set
+ready_for_extraction <- all(load_success) && google_set
+ready_for_fetching <- all(load_success) && (pubmed_set || scopus_set)
 
-if (ready_for_work) {
-  cat("\n✓ Environment is ready for LLM extraction work!\n")
+if (ready_for_extraction) {
+  cat("\n✓ Environment ready for LLM extraction!\n")
   cat("  Next: Run notebook 0010_test_gemini_api.Rmd\n")
-} else {
-  cat("\n⚠ Some setup items need attention:\n")
+}
+
+if (ready_for_fetching) {
+  cat("\n✓ Environment ready for data fetching!\n")
+  cat("  Next: Run notebook 0090_fetch_pubmed_data.Rmd or 0095_fetch_scopus_data.Rmd\n")
+}
+
+if (!ready_for_extraction && !ready_for_fetching) {
+  cat("\n⚠ Setup items need attention:\n")
   if (!all(load_success)) {
     cat("  - Fix package loading errors\n")
   }
-  if (!api_key_set) {
-    cat("  - Configure GOOGLE_API_KEY in .env file\n")
+  if (!google_set) {
+    cat("  - Configure GOOGLE_API_KEY for LLM extraction\n")
+  }
+  if (!pubmed_set && !scopus_set) {
+    cat("  - Configure PUB_MED_API_KEY or SCOPUS_API_KEY for data fetching\n")
   }
 }
 ```

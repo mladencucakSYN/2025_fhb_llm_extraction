@@ -1,0 +1,690 @@
+---
+title: "Working with Lists and API Responses"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+```
+
+## Understanding Lists in R
+
+This notebook teaches how to work with R lists, which are the primary data structure returned by API functions. Lists can contain different types of data (numbers, text, data frames) organized hierarchically.
+
+### Purpose
+
+After fetching data from PubMed or Scopus, you receive complex list structures. Understanding how to access and extract specific elements is essential for:
+- Inspecting API responses
+- Extracting specific fields
+- Converting lists to data frames
+- Debugging when things go wrong
+
+## Load Required Functions
+
+```{r load-functions}
+source("../R/pubmed_api.R")
+source("../R/scopus_api.R")
+
+library(dplyr)
+library(jsonlite)  # For pretty printing lists
+```
+
+**Result**: Functions loaded.
+
+## Part 1: List Basics
+
+Before working with API responses, understand basic list operations.
+
+### Creating Lists
+
+```{r create-list}
+# Create a simple list
+person <- list(
+  name = "John Smith",
+  age = 35,
+  publications = c(2019, 2020, 2022),
+  contact = list(
+    email = "john@example.com",
+    phone = "+1234567890"
+  )
+)
+
+cat("Created a list with 4 elements\n\n")
+
+# Print the list
+print(person)
+```
+
+**Result**: Created a nested list with different data types.
+
+### Accessing List Elements
+
+There are three ways to access list elements: `$`, `[[]]`, and `[]`.
+
+```{r access-elements}
+cat("=== Three Ways to Access Lists ===\n\n")
+
+# Method 1: Dollar sign $ (most common, by name)
+cat("1. Using $ (dollar sign):\n")
+cat("   person$name =", person$name, "\n")
+cat("   person$age =", person$age, "\n\n")
+
+# Method 2: Double brackets [[]] (by name or position)
+cat("2. Using [[]] (double brackets):\n")
+cat("   person[[\"name\"]] =", person[["name"]], "\n")
+cat("   person[[1]] =", person[[1]], "(first element)\n\n")
+
+# Method 3: Single brackets [] (returns a list)
+cat("3. Using [] (single brackets - returns list):\n")
+cat("   person[1] returns a list:\n")
+print(person[1])
+cat("\n")
+cat("   person[[1]] returns the value:\n")
+print(person[[1]])
+```
+
+**Result**: Three methods demonstrated. Use `$` for named elements (most readable), `[[]]` for programmatic access, `[]` to subset lists.
+
+### Nested List Access
+
+Lists can contain other lists. Access nested elements by chaining.
+
+```{r nested-access}
+cat("=== Accessing Nested Lists ===\n\n")
+
+cat("Nested structure: person$contact$email\n")
+cat("Result:", person$contact$email, "\n\n")
+
+# Alternative with brackets
+cat("Alternative: person[[\"contact\"]][[\"email\"]]\n")
+cat("Result:", person[["contact"]][["email"]], "\n\n")
+
+# Check structure
+cat("Structure of nested element:\n")
+str(person$contact)
+```
+
+**Result**: Nested lists accessed by chaining `$` or `[[]]` operators.
+
+### Working with Vectors in Lists
+
+Lists can contain vectors (arrays). Access individual elements with `[position]`.
+
+```{r vector-in-list}
+cat("=== Vectors Inside Lists ===\n\n")
+
+# Access the entire vector
+cat("All publications:", person$publications, "\n\n")
+
+# Access specific elements of the vector
+cat("First publication:", person$publications[1], "\n")
+cat("Last publication:", person$publications[3], "\n")
+cat("Second and third:", person$publications[2:3], "\n\n")
+
+# Number of publications
+cat("Total publications:", length(person$publications), "\n")
+```
+
+**Result**: Vectors accessed with `$` for the vector, then `[]` for individual elements.
+
+## Part 2: PubMed API Response Structure
+
+Now apply these concepts to real PubMed API responses.
+
+### Fetch a Single Article
+
+```{r fetch-pubmed-single}
+cat("=== Fetching Single PubMed Article ===\n\n")
+
+# Search for one article
+pmids <- pubmed_search("fusarium graminearum wheat", retmax = 1)
+cat("Found PMID:", pmids[1], "\n\n")
+
+# Fetch the article
+article <- pubmed_fetch(pmids[1])
+
+cat("API returned a data frame with", nrow(article), "row(s)\n")
+cat("Columns:", ncol(article), "\n\n")
+
+# Show structure
+cat("Structure of response:\n")
+str(article, max.level = 1)
+```
+
+**Result**: PubMed returns a data frame (special type of list where each column is a list element).
+
+### Inspect Article Fields
+
+```{r inspect-pubmed}
+cat("=== Inspecting PubMed Article ===\n\n")
+
+# Data frames are lists where each column is an element
+cat("Available fields (column names):\n")
+print(names(article))
+cat("\n")
+
+# Access specific fields
+cat("PMID:", article$pmid, "\n")
+cat("Year:", article$pub_year, "\n\n")
+
+cat("Title:\n")
+cat(strwrap(article$title, width = 70), sep = "\n")
+cat("\n\n")
+
+cat("Abstract length:", nchar(article$abstract), "characters\n\n")
+
+cat("First 200 characters of abstract:\n")
+cat(substr(article$abstract, 1, 200), "...\n\n")
+
+cat("Keywords:\n")
+cat(article$keywords, "\n\n")
+
+cat("Authors:\n")
+cat(article$authors, "\n")
+```
+
+**Result**: Each field accessed with `$columnname`. Data frame columns work like list elements.
+
+### Working with Multiple Articles
+
+```{r fetch-pubmed-multiple}
+cat("=== Fetching Multiple Articles ===\n\n")
+
+# Fetch 5 articles
+pmids <- pubmed_search("fusarium head blight", retmax = 5)
+articles <- pubmed_fetch(pmids)
+
+cat("Fetched", nrow(articles), "articles\n\n")
+
+# Access all titles
+cat("All titles:\n")
+cat(rep("-", 70), "\n", sep = "")
+for (i in 1:nrow(articles)) {
+  cat(i, ". ", articles$title[i], "\n", sep = "")
+}
+cat(rep("-", 70), "\n", sep = "")
+```
+
+**Result**: Multiple rows accessed by index `articles$title[i]`.
+
+### Extracting Specific Information
+
+```{r extract-pubmed}
+cat("=== Extracting Specific Information ===\n\n")
+
+# Extract just PMIDs and years
+cat("PMIDs and publication years:\n")
+for (i in 1:nrow(articles)) {
+  cat(sprintf("  PMID %s: published in %d\n",
+              articles$pmid[i],
+              articles$pub_year[i]))
+}
+cat("\n")
+
+# Find recent articles
+recent <- articles[articles$pub_year >= 2024, ]
+cat("Articles from 2024 or later:", nrow(recent), "\n\n")
+
+# Articles with DOI
+with_doi <- articles[!is.na(articles$doi), ]
+cat("Articles with DOI:", nrow(with_doi), "\n")
+```
+
+**Result**: Subset data frames with brackets `articles[condition, ]`.
+
+## Part 3: Scopus API Response Structure
+
+Scopus returns slightly different structures with nested lists.
+
+### Fetch Scopus Data
+
+```{r fetch-scopus-single, eval=FALSE}
+# Set eval=TRUE if you have Scopus API key
+cat("=== Fetching Scopus Data ===\n\n")
+
+# Fetch one article
+scopus_result <- scopus_search("TITLE-ABS-KEY(fusarium AND wheat)", count = 1)
+
+# This returns a LIST with multiple elements
+cat("Scopus search returns a list with these elements:\n")
+print(names(scopus_result))
+cat("\n")
+
+# Element 1: results (data frame)
+cat("Element 1 - results: data frame with", nrow(scopus_result$results), "article(s)\n")
+
+# Element 2: total_results (number)
+cat("Element 2 - total_results:", scopus_result$total_results, "\n")
+
+# Element 3: query_url (text)
+cat("Element 3 - query_url:", scopus_result$query_url, "\n\n")
+
+# Access the article data frame
+article <- scopus_result$results
+
+cat("Article fields:\n")
+print(names(article))
+```
+
+**Result**: Scopus returns a list containing a data frame, not a data frame directly.
+
+### Extract Scopus Article Information
+
+```{r inspect-scopus, eval=FALSE}
+# Set eval=TRUE if you have Scopus API key
+cat("=== Inspecting Scopus Article ===\n\n")
+
+# Must access the results element first, then the columns
+cat("Scopus ID:", article$scopus_id, "\n")
+cat("DOI:", article$doi, "\n")
+cat("Title:", article$title, "\n")
+cat("Cited by:", article$cited_by, "articles\n\n")
+
+# Check for missing values
+cat("Checking for missing fields:\n")
+cat("  Abstract present:", !is.na(article$abstract), "\n")
+cat("  Keywords present:", !is.na(article$keywords), "\n")
+cat("  DOI present:", !is.na(article$doi), "\n")
+```
+
+**Result**: Scopus structure: `list$results$column` vs PubMed's `dataframe$column`.
+
+## Part 4: Common List Operations
+
+Practical operations you'll need for working with API data.
+
+### Check What's Inside
+
+```{r inspect-structure}
+cat("=== Inspecting Unknown Structures ===\n\n")
+
+# Create a mystery list
+mystery <- list(
+  status = "success",
+  count = 5,
+  data = data.frame(
+    id = 1:5,
+    value = c(10, 20, 30, 40, 50)
+  )
+)
+
+cat("Method 1: names() - see element names\n")
+print(names(mystery))
+cat("\n")
+
+cat("Method 2: str() - see structure\n")
+str(mystery)
+cat("\n")
+
+cat("Method 3: class() - see object type\n")
+cat("  class(mystery):", class(mystery), "\n")
+cat("  class(mystery$data):", class(mystery$data), "\n\n")
+
+cat("Method 4: length() - count elements\n")
+cat("  length(mystery):", length(mystery), "elements\n")
+```
+
+**Result**: Use `names()`, `str()`, `class()`, and `length()` to inspect unknown structures.
+
+### Convert List to Data Frame
+
+```{r list-to-dataframe}
+cat("=== Converting Lists to Data Frames ===\n\n")
+
+# Create a list of article information
+articles_list <- list(
+  pmid = c("123", "456", "789"),
+  title = c("Article 1", "Article 2", "Article 3"),
+  year = c(2021, 2022, 2023)
+)
+
+cat("Original list structure:\n")
+str(articles_list)
+cat("\n")
+
+# Convert to data frame
+articles_df <- as.data.frame(articles_list)
+
+cat("Converted to data frame:\n")
+print(articles_df)
+cat("\n")
+
+cat("Now can use dplyr operations:\n")
+recent_articles <- articles_df %>%
+  filter(year >= 2022)
+print(recent_articles)
+```
+
+**Result**: Use `as.data.frame()` to convert list to tabular format.
+
+### Extract Specific Fields from Multiple Articles
+
+```{r extract-fields}
+cat("=== Extracting Fields Across Articles ===\n\n")
+
+# Using the earlier PubMed data
+if (exists("articles") && nrow(articles) > 0) {
+
+  # Method 1: Direct column access
+  all_years <- articles$pub_year
+  cat("Method 1 - Direct access:\n")
+  cat("  Years:", all_years, "\n\n")
+
+  # Method 2: Using dplyr select
+  titles_only <- articles %>%
+    select(pmid, title)
+
+  cat("Method 2 - Using select():\n")
+  print(titles_only)
+  cat("\n")
+
+  # Method 3: Create new data frame with specific fields
+  summary_df <- data.frame(
+    id = articles$pmid,
+    publication_year = articles$pub_year,
+    has_doi = !is.na(articles$doi),
+    abstract_length = nchar(articles$abstract)
+  )
+
+  cat("Method 3 - Create new data frame:\n")
+  print(summary_df)
+}
+```
+
+**Result**: Multiple ways to extract and reorganize data.
+
+### Handle Missing Values
+
+```{r handle-missing}
+cat("=== Handling Missing Values in Lists ===\n\n")
+
+# Example with missing data
+test_data <- data.frame(
+  id = 1:5,
+  value = c(10, NA, 30, NA, 50),
+  text = c("A", "B", NA, "D", "E")
+)
+
+cat("Data with missing values:\n")
+print(test_data)
+cat("\n")
+
+cat("Check for missing values:\n")
+cat("  is.na(test_data$value):", is.na(test_data$value), "\n")
+cat("  sum(is.na(test_data$value)):", sum(is.na(test_data$value)), "missing\n\n")
+
+cat("Filter out rows with missing 'value':\n")
+complete_data <- test_data[!is.na(test_data$value), ]
+print(complete_data)
+cat("\n")
+
+cat("Replace NA with default value:\n")
+test_data$value[is.na(test_data$value)] <- 0
+print(test_data)
+```
+
+**Result**: Use `is.na()` to detect and handle missing values.
+
+## Part 5: Practical Examples with API Data
+
+Real-world examples using PubMed responses.
+
+### Example 1: Extract Titles and Years
+
+```{r example-1}
+cat("=== Example 1: Create Publication Timeline ===\n\n")
+
+if (exists("articles") && nrow(articles) > 0) {
+
+  # Create timeline data
+  timeline <- articles %>%
+    select(pmid, title, pub_year) %>%
+    arrange(pub_year)
+
+  cat("Publications by year:\n")
+  print(timeline)
+  cat("\n")
+
+  # Count by year
+  year_counts <- timeline %>%
+    group_by(pub_year) %>%
+    summarise(count = n())
+
+  cat("Publications per year:\n")
+  print(year_counts)
+}
+```
+
+**Result**: Extracted and organized temporal data.
+
+### Example 2: Parse Author Lists
+
+```{r example-2}
+cat("=== Example 2: Parse Author Names ===\n\n")
+
+if (exists("articles") && nrow(articles) > 0) {
+
+  # Get first article's authors
+  author_string <- articles$authors[1]
+  cat("Author string from API:\n")
+  cat(author_string, "\n\n")
+
+  # Split into individual authors
+  if (!is.na(author_string)) {
+    author_list <- strsplit(author_string, "; ")[[1]]
+
+    cat("Individual authors:\n")
+    for (i in 1:length(author_list)) {
+      cat(sprintf("  %d. %s\n", i, author_list[i]))
+    }
+    cat("\n")
+
+    cat("Total authors:", length(author_list), "\n")
+    cat("First author:", author_list[1], "\n")
+  }
+}
+```
+
+**Result**: Split semicolon-separated strings into individual elements.
+
+### Example 3: Filter by Keywords
+
+```{r example-3}
+cat("=== Example 3: Filter Articles by Keywords ===\n\n")
+
+if (exists("articles") && nrow(articles) > 0) {
+
+  # Find articles mentioning "temperature"
+  temp_articles <- articles %>%
+    filter(grepl("temperature", abstract, ignore.case = TRUE))
+
+  cat("Articles mentioning 'temperature':", nrow(temp_articles), "\n\n")
+
+  if (nrow(temp_articles) > 0) {
+    cat("Titles:\n")
+    for (i in 1:nrow(temp_articles)) {
+      cat(sprintf("%d. %s\n", i, temp_articles$title[i]))
+    }
+  }
+}
+```
+
+**Result**: Used `grepl()` to search within text fields.
+
+### Example 4: Create Summary Statistics
+
+```{r example-4}
+cat("=== Example 4: Summary Statistics ===\n\n")
+
+if (exists("articles") && nrow(articles) > 0) {
+
+  # Calculate statistics
+  cat("Dataset Summary:\n")
+  cat(rep("-", 40), "\n", sep = "")
+  cat("Total articles:", nrow(articles), "\n")
+  cat("Year range:", min(articles$pub_year, na.rm = TRUE), "-",
+      max(articles$pub_year, na.rm = TRUE), "\n")
+  cat("Articles with DOI:", sum(!is.na(articles$doi)),
+      sprintf("(%.1f%%)\n", 100 * sum(!is.na(articles$doi)) / nrow(articles)))
+  cat("Articles with keywords:", sum(!is.na(articles$keywords)),
+      sprintf("(%.1f%%)\n", 100 * sum(!is.na(articles$keywords)) / nrow(articles)))
+
+  # Abstract lengths
+  abstract_lengths <- nchar(articles$abstract)
+  cat("\nAbstract lengths:\n")
+  cat("  Mean:", round(mean(abstract_lengths, na.rm = TRUE)), "characters\n")
+  cat("  Min:", min(abstract_lengths, na.rm = TRUE), "\n")
+  cat("  Max:", max(abstract_lengths, na.rm = TRUE), "\n")
+  cat(rep("-", 40), "\n", sep = "")
+}
+```
+
+**Result**: Computed statistics across list/data frame columns.
+
+## Part 6: Common Mistakes and Solutions
+
+### Mistake 1: Confusing `[[` and `[`
+
+```{r mistake-1}
+cat("=== Common Mistake: Single vs Double Brackets ===\n\n")
+
+my_list <- list(name = "John", age = 30)
+
+cat("Wrong - returns a list:\n")
+result1 <- my_list["name"]
+cat("  class:", class(result1), "\n")
+print(result1)
+cat("\n")
+
+cat("Correct - returns the value:\n")
+result2 <- my_list[["name"]]
+cat("  class:", class(result2), "\n")
+cat("  value:", result2, "\n")
+```
+
+**Solution**: Use `[[]]` or `$` to get values, `[]` to subset lists.
+
+### Mistake 2: Forgetting to Check for NA
+
+```{r mistake-2}
+cat("=== Common Mistake: Not Checking for NA ===\n\n")
+
+test_list <- list(value = NA)
+
+cat("This will cause problems:\n")
+# result <- test_list$value + 10  # Would give NA
+cat("  NA + 10 =", test_list$value + 10, "\n\n")
+
+cat("Solution - check first:\n")
+if (!is.na(test_list$value)) {
+  result <- test_list$value + 10
+  cat("  Result:", result, "\n")
+} else {
+  cat("  Value is NA, using default: 0\n")
+  result <- 0
+}
+```
+
+**Solution**: Always check `is.na()` before operations.
+
+### Mistake 3: Wrong Level of Nesting
+
+```{r mistake-3}
+cat("=== Common Mistake: Wrong Nesting Level ===\n\n")
+
+# Scopus-like structure
+scopus_response <- list(
+  results = data.frame(
+    title = "Article 1",
+    year = 2023
+  ),
+  total_results = 100
+)
+
+cat("Wrong - trying to access title directly:\n")
+cat("  'scopus_response$title' returns: NULL\n\n")
+
+cat("Correct - access through results first:\n")
+cat("  scopus_response$results$title:", scopus_response$results$title, "\n")
+```
+
+**Solution**: Use `str()` to understand nesting, then navigate step-by-step.
+
+## Summary: Quick Reference
+
+```{r summary}
+cat("\n")
+cat("╔═══════════════════════════════════════════════════════════╗\n")
+cat("║        R LIST OPERATIONS QUICK REFERENCE                  ║\n")
+cat("╚═══════════════════════════════════════════════════════════╝\n")
+cat("\n")
+cat("ACCESS ELEMENTS:\n")
+cat("  list$name          - Get element by name (most common)\n")
+cat("  list[[\"name\"]]     - Get element by name (programmatic)\n")
+cat("  list[[1]]          - Get element by position\n")
+cat("  list[1]            - Get sublist (less common)\n")
+cat("\n")
+cat("NESTED ACCESS:\n")
+cat("  list$level1$level2     - Chain with $\n")
+cat("  list[[\"a\"]][[\"b\"]]    - Chain with [[]]\n")
+cat("\n")
+cat("INSPECT STRUCTURE:\n")
+cat("  names(list)        - See element names\n")
+cat("  str(list)          - See full structure\n")
+cat("  class(list)        - Check object type\n")
+cat("  length(list)       - Count elements\n")
+cat("\n")
+cat("DATA FRAME COLUMNS:\n")
+cat("  df$column          - Get column\n")
+cat("  df$column[i]       - Get specific row\n")
+cat("  df[i, ]            - Get row i\n")
+cat("  df[, j]            - Get column j\n")
+cat("\n")
+cat("CHECK VALUES:\n")
+cat("  is.na(value)       - Check if missing\n")
+cat("  !is.na(value)      - Check if present\n")
+cat("  sum(is.na(vec))    - Count missing\n")
+cat("\n")
+cat("API RESPONSE PATTERNS:\n")
+cat("  PubMed:    dataframe$column\n")
+cat("  Scopus:    list$results$column\n")
+cat("\n")
+```
+
+## Practice Exercise
+
+Try these exercises to practice:
+
+```{r exercise, eval=FALSE}
+# 1. Fetch 3 articles from PubMed
+my_articles <- pubmed_fetch(pubmed_search("fusarium", retmax = 3))
+
+# 2. Extract just the titles
+# YOUR CODE HERE: my_titles <- ...
+
+# 3. Find articles published after 2020
+# YOUR CODE HERE: recent <- ...
+
+# 4. Count how many have keywords
+# YOUR CODE HERE: keyword_count <- ...
+
+# 5. Get the first author name from the first article
+# YOUR CODE HERE: first_author <- ...
+```
+
+## Next Steps
+
+1. Practice accessing elements from PubMed responses in notebook 0090
+2. Compare PubMed and Scopus structures in notebook 0095
+3. Use these skills to inspect extraction results in later notebooks
+4. When stuck, use `str()` to see structure, then access step-by-step
+
+## Key Takeaways
+
+- **Lists are containers** that hold different types of data
+- **Use `$` for named access** - most readable and common
+- **Use `[[]]` for programmatic access** - when name is in a variable
+- **Use `str()` when confused** - shows the complete structure
+- **Check for NA** before doing operations
+- **Data frames are special lists** where columns are elements
+- **API responses nest data differently** - PubMed vs Scopus patterns

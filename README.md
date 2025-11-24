@@ -16,7 +16,9 @@ This project has been restructured to provide:
 
 ### 1. Prerequisites
 - R ≥ 4.1 (RStudio recommended)
-- Google Gemini API key (free tier available)
+- **Google Gemini API key** (free tier available) - required for LLM extraction
+- **PubMed API key** (free, optional) - increases rate limit for PubMed fetching
+- **Scopus API key** (institutional access required) - for Scopus data fetching
 - Git access to this repository
 
 ### 2. First-Time Setup
@@ -30,9 +32,11 @@ cd 2025_fhb_llm_extraction
 install.packages("renv")
 renv::restore()
 
-# 3. Set up API key
+# 3. Set up API keys
 # Create .env file in project root:
-GOOGLE_API_KEY=your_actual_key_here
+GOOGLE_API_KEY=your_google_key_here
+PUB_MED_API_KEY=your_pubmed_key_here     # Optional but recommended
+SCOPUS_API_KEY=your_scopus_key_here      # Required for Scopus fetching
 
 # 4. Run setup notebook
 # Open notebooks/0000_setup_environment.Rmd in RStudio and run
@@ -51,6 +55,8 @@ GOOGLE_API_KEY=your_actual_key_here
 2025_fhb_llm_extraction/
 ├── R/                              # Production R functions
 │   ├── utils.R                     # Config, file I/O, text cleaning
+│   ├── pubmed_api.R                # PubMed E-utilities API functions
+│   ├── scopus_api.R                # Scopus Search API functions
 │   ├── retry_logic.R               # Exponential backoff & error handling
 │   ├── batch_processor.R           # Rate-limited batch processing
 │   ├── cache_manager.R             # Save/load extraction results
@@ -65,6 +71,11 @@ GOOGLE_API_KEY=your_actual_key_here
 │   │   ├── 0010_test_gemini_api.Rmd
 │   │   ├── 0020_toy_example_extraction.Rmd
 │   │   └── 0030_error_handling_basics.Rmd
+│   │
+│   ├── Data Fetching (0090-0095) [Optional]
+│   │   ├── 0090_fetch_pubmed_data.Rmd
+│   │   ├── 0092_working_with_lists.Rmd    ⭐ List tutorial
+│   │   └── 0095_fetch_scopus_data.Rmd
 │   │
 │   ├── Section 1: Data Loading (0100-0120)
 │   │   ├── 0100_load_fusarium_data.Rmd
@@ -123,9 +134,40 @@ Learn basic concepts with toy examples before tackling real research data.
 - **0020**: Compare rule-based vs. LLM extraction on simple examples
 - **0030**: Implement retry logic for rate limits
 
+### Data Fetching: Literature Search (Optional, 10-20 min)
+**Note**: Skip this section if you already have literature data in CSV format.
+
+Programmatically fetch scientific literature from databases:
+- **0090**: Fetch from PubMed (NCBI E-utilities API)
+  - Search 1,572 Fusarium articles in PubMed
+  - Free API (key optional, increases rate limit)
+  - Fetch metadata: title, abstract, keywords, MeSH terms
+
+- **0092**: **Working with Lists and API Responses** ⭐ **Start here if new to R lists**
+  - Learn how to access list elements with `$`, `[[]]`, and `[]`
+  - Understand PubMed and Scopus response structures
+  - Practice extracting fields from API data
+  - Common mistakes and solutions
+  - Includes practice exercises
+
+- **0095**: Fetch from Scopus (Elsevier API)
+  - Broader disciplinary coverage
+  - Includes conference proceedings
+  - Citation counts and affiliation data
+  - Requires institutional API key
+
+**Workflow**:
+1. Run 0090 to fetch PubMed data (saves to `data/fusarium/fusarium_pubmed_full.csv`)
+2. **Run 0092 to learn list operations** (if unfamiliar with R lists)
+3. Run 0095 to fetch Scopus data (saves to `data/fusarium/fusarium_scopus_full.csv`)
+4. Merge both sources and deduplicate (code provided in 0095)
+5. Use merged data in Section 1 below
+
+**Quick practice script**: Run `Rscript dev/example_working_with_api_lists.R` for a quick demonstration of list operations with real API data.
+
 ### Section 1: Load Research Data (20 min)
 Load and prepare the Fusarium literature dataset.
-- **0100**: Load 2,663 Fusarium studies
+- **0100**: Load literature data (from CSV or fetched data)
 - **0110**: Clean and preprocess abstracts
 - **0120**: Exploratory analysis of dataset
 
@@ -179,10 +221,12 @@ All extraction code includes:
 All reusable code is in `R/` directory:
 ```r
 # Load functions in any notebook:
-source("../R/gemini_extraction.R")
-source("../R/retry_logic.R")
-source("../R/batch_processor.R")
-source("../R/cache_manager.R")
+source("../R/pubmed_api.R")        # Fetch from PubMed
+source("../R/scopus_api.R")        # Fetch from Scopus
+source("../R/gemini_extraction.R") # LLM extraction
+source("../R/retry_logic.R")       # Error handling
+source("../R/batch_processor.R")   # Rate-limited processing
+source("../R/cache_manager.R")     # Result caching
 ```
 
 ## Extraction Schema

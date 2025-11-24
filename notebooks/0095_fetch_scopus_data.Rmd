@@ -1,0 +1,436 @@
+---
+title: "Fetch Literature from Scopus"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+```
+
+## Fetching Data from Scopus
+
+This notebook demonstrates how to search and fetch literature from Scopus using Elsevier API. Scopus provides broader coverage than PubMed, including conference papers and some journals not indexed in PubMed.
+
+### Purpose
+
+Scopus complements PubMed by providing:
+- Broader disciplinary coverage (beyond biomedical)
+- Conference papers and proceedings
+- Citation counts for impact assessment
+- Different indexing that may capture articles missed by PubMed
+
+## Load Required Functions
+
+Source the Scopus API functions and supporting libraries.
+
+```{r load-functions}
+# Source project functions
+source("../R/scopus_api.R")
+source("../R/utils.R")
+
+# Libraries
+library(dplyr)
+library(tidyr)
+library(readr)
+
+# Set data directory
+data_dir <- "../data/fusarium"
+```
+
+**Result**: Scopus API functions loaded.
+
+## Check API Key
+
+Verify that Scopus API key is configured in .env file.
+
+```{r check-api-key}
+api_key <- Sys.getenv("SCOPUS_API_KEY")
+api_key_present <- nchar(api_key) > 0
+
+if (api_key_present) {
+  cat("✓ Scopus API key found\n")
+  cat("  Key length:", nchar(api_key), "characters\n")
+  cat("  Key preview:", substr(api_key, 1, 8), "...\n")
+} else {
+  cat("✗ Scopus API key not found\n")
+  cat("\nTo get an API key:\n")
+  cat("1. Visit: https://dev.elsevier.com/\n")
+  cat("2. Register for API key (requires institutional access or trial)\n")
+  cat("3. Go to My API Key section\n")
+  cat("4. Create API key\n")
+  cat("5. Add to .env: SCOPUS_API_KEY=your_key_here\n")
+  cat("\nNote: Scopus API requires institutional access or free trial.\n")
+  cat("      Rate limits and quotas vary by subscription level.\n")
+}
+```
+
+**Result**: API key status displayed. Scopus requires API key (not optional like PubMed).
+
+## Test Scopus Search
+
+Test the search functionality with a small query to verify API connectivity.
+
+```{r test-search}
+if (!api_key_present) {
+  cat("⚠ Skipping search test - API key required\n")
+} else {
+  cat("=== Testing Scopus Search ===\n\n")
+
+  # Simple test query using Scopus syntax
+  test_query <- "TITLE-ABS-KEY(fusarium AND wheat)"
+  cat("Test query:", test_query, "\n\n")
+
+  # Search with small limit
+  test_result <- scopus_search(
+    query = test_query,
+    count = 10,
+    api_key = api_key
+  )
+
+  cat("\nSearch results:\n")
+  cat("  Total in Scopus:", test_result$total_results, "\n")
+  cat("  Articles returned:", nrow(test_result$results), "\n")
+
+  if (nrow(test_result$results) > 0) {
+    cat("\nFirst article:\n")
+    cat("  Scopus ID:", test_result$results$scopus_id[1], "\n")
+    cat("  Title:", test_result$results$title[1], "\n")
+  }
+}
+```
+
+**Result**: Scopus search tested successfully. Connection verified.
+
+## Inspect Test Data
+
+Examine the structure of Scopus results.
+
+```{r inspect-test}
+if (exists("test_result") && nrow(test_result$results) > 0) {
+  cat("=== Scopus Data Structure ===\n\n")
+
+  articles <- test_result$results
+
+  cat("Columns returned by Scopus:\n")
+  print(names(articles))
+
+  cat("\n\nSample article details:\n")
+  cat(rep("-", 60), "\n", sep = "")
+  article1 <- articles[1, ]
+  cat("Scopus ID:", article1$scopus_id, "\n")
+  cat("EID:", article1$eid, "\n")
+  cat("DOI:", article1$doi, "\n")
+  cat("Title:", article1$title, "\n")
+  cat("Year:", article1$pub_year, "\n")
+  cat("Journal:", article1$journal, "\n")
+  cat("Authors:", article1$authors, "\n")
+  cat("Cited by:", article1$cited_by, "articles\n")
+  cat("Abstract length:", nchar(article1$abstract), "characters\n")
+  cat("Keywords:", article1$keywords, "\n")
+  cat(rep("-", 60), "\n", sep = "")
+}
+```
+
+**Result**: Scopus data structure inspected. Note differences from PubMed (citation counts, different IDs).
+
+## Construct Fusarium Research Query
+
+Build a comprehensive Scopus search query for Fusarium ecophysiology research.
+
+```{r build-query}
+# Query components (same logic as PubMed, different syntax)
+fusarium_terms <- "(fusarium OR \"fusarium graminearum\" OR \"fusarium head blight\" OR FHB)"
+crop_terms <- "(wheat OR barley OR maize OR corn OR cereal OR grain)"
+abiotic_terms <- "(temperature OR water OR moisture OR humidity OR climate OR environment OR abiotic OR stress)"
+
+# Combine and wrap in Scopus TITLE-ABS-KEY syntax
+fusarium_query <- paste0(
+  "TITLE-ABS-KEY(",
+  fusarium_terms, " AND ", crop_terms, " AND ", abiotic_terms,
+  ")"
+)
+
+cat("Fusarium Ecophysiology Query (Scopus syntax):\n")
+cat(rep("=", 70), "\n", sep = "")
+cat(strwrap(fusarium_query, width = 70), sep = "\n")
+cat(rep("=", 70), "\n", sep = "")
+```
+
+**Result**: Scopus query constructed with TITLE-ABS-KEY syntax.
+
+## Preview Search Results
+
+Execute search to see how many articles match before fetching.
+
+```{r preview-search}
+if (!api_key_present) {
+  cat("⚠ Skipping preview - API key required\n")
+} else {
+  cat("\n=== Preview Search Results ===\n\n")
+
+  preview_result <- scopus_search(
+    query = fusarium_query,
+    count = 25,  # Small preview
+    api_key = api_key
+  )
+
+  cat("\nSearch Summary:\n")
+  cat("  Total articles in Scopus:", preview_result$total_results, "\n")
+  cat("  Articles retrieved (preview):", nrow(preview_result$results), "\n")
+
+  if (nrow(preview_result$results) > 0) {
+    cat("\nRecent articles (first 5):\n")
+    recent <- preview_result$results %>%
+      arrange(desc(pub_year)) %>%
+      select(pub_year, title, journal, cited_by) %>%
+      head(5)
+    print(recent, width = 100)
+  }
+}
+```
+
+**Result**: Search executed. Total article count displayed.
+
+## Fetch Sample Dataset
+
+Fetch a manageable sample of articles for testing extraction pipeline.
+
+```{r fetch-sample, eval=FALSE}
+# Fetch 100 articles for testing
+# Set eval=TRUE to actually run this (may take 1-2 minutes)
+
+if (!api_key_present) {
+  cat("⚠ Cannot fetch - API key required\n")
+} else {
+  cat("=== Fetching Sample Dataset ===\n\n")
+  cat("Fetching 100 articles from Scopus...\n")
+  cat("This may take 1-2 minutes with rate limiting.\n\n")
+
+  sample_articles <- scopus_search_all(
+    query = fusarium_query,
+    max_results = 100,
+    api_key = api_key
+  )
+
+  # Add unique ID
+  sample_articles <- sample_articles %>%
+    mutate(id = coalesce(scopus_id, eid))
+
+  cat("\n=== Fetch Complete ===\n")
+  cat("Articles fetched:", nrow(sample_articles), "\n")
+  cat("Columns:", ncol(sample_articles), "\n")
+
+  # Save to file
+  output_file <- file.path(data_dir, "fusarium_scopus_sample_100.csv")
+  write_csv(sample_articles, output_file)
+  cat("\nSaved to:", output_file, "\n")
+}
+```
+
+**Result**: Sample dataset of 100 articles fetched and saved.
+
+## Fetch Full Dataset
+
+Fetch a larger dataset for production research.
+
+```{r fetch-full, eval=FALSE}
+# Fetch up to 1000 articles for research
+# WARNING: This will take 5-10 minutes and uses API quota
+# Set eval=TRUE only when ready to fetch full dataset
+
+if (!api_key_present) {
+  cat("⚠ Cannot fetch - API key required\n")
+} else {
+  cat("=== Fetching Full Dataset ===\n\n")
+  cat("Fetching up to 1000 articles from Scopus...\n")
+  cat("WARNING: This will take 5-10 minutes and uses API quota.\n\n")
+
+  # Use convenience function
+  fusarium_full <- fetch_fusarium_scopus(
+    max_results = 1000,
+    api_key = api_key
+  )
+
+  cat("\n=== Fetch Complete ===\n")
+  cat("Articles fetched:", nrow(fusarium_full), "\n")
+
+  # Check data quality
+  cat("\nData Quality Check:\n")
+  cat("  Articles with abstracts:", sum(!is.na(fusarium_full$abstract)), "\n")
+  cat("  Articles with keywords:", sum(!is.na(fusarium_full$keywords)), "\n")
+  cat("  Articles with DOI:", sum(!is.na(fusarium_full$doi)), "\n")
+  cat("  Articles with citation counts:", sum(!is.na(fusarium_full$cited_by)), "\n")
+  cat("  Year range:", min(fusarium_full$pub_year, na.rm = TRUE), "-",
+      max(fusarium_full$pub_year, na.rm = TRUE), "\n")
+
+  # Save to file
+  output_file <- file.path(data_dir, "fusarium_scopus_full.csv")
+  write_csv(fusarium_full, output_file)
+  cat("\nSaved to:", output_file, "\n")
+
+  # Also save as RDS for R
+  rds_file <- file.path(data_dir, "fusarium_scopus_full.rds")
+  saveRDS(fusarium_full, rds_file)
+  cat("Saved to:", rds_file, "\n")
+}
+```
+
+**Result**: Full dataset fetched and saved in both CSV and RDS formats.
+
+## Compare with PubMed Data
+
+If PubMed data exists, compare coverage and identify unique articles.
+
+```{r compare-sources}
+pubmed_file <- file.path(data_dir, "fusarium_pubmed_sample_100.csv")
+scopus_file <- file.path(data_dir, "fusarium_scopus_sample_100.csv")
+
+if (file.exists(pubmed_file) && file.exists(scopus_file)) {
+  cat("=== Comparing PubMed and Scopus ===\n\n")
+
+  pubmed_data <- read_csv(pubmed_file, show_col_types = FALSE)
+  scopus_data <- read_csv(scopus_file, show_col_types = FALSE)
+
+  cat("PubMed articles:", nrow(pubmed_data), "\n")
+  cat("Scopus articles:", nrow(scopus_data), "\n")
+
+  # Compare by DOI (where available)
+  pubmed_dois <- pubmed_data %>%
+    filter(!is.na(doi)) %>%
+    pull(doi) %>%
+    tolower() %>%
+    unique()
+
+  scopus_dois <- scopus_data %>%
+    filter(!is.na(doi)) %>%
+    pull(doi) %>%
+    tolower() %>%
+    unique()
+
+  overlap <- intersect(pubmed_dois, scopus_dois)
+  pubmed_only <- setdiff(pubmed_dois, scopus_dois)
+  scopus_only <- setdiff(scopus_dois, pubmed_dois)
+
+  cat("\nDOI-based comparison:\n")
+  cat("  PubMed articles with DOI:", length(pubmed_dois), "\n")
+  cat("  Scopus articles with DOI:", length(scopus_dois), "\n")
+  cat("  Overlap (same DOI):", length(overlap), "\n")
+  cat("  Unique to PubMed:", length(pubmed_only), "\n")
+  cat("  Unique to Scopus:", length(scopus_only), "\n")
+
+  cat("\nNote: Overlap calculated only on articles with DOIs.\n")
+  cat("      Actual overlap may be higher (missing DOIs, different formats).\n")
+
+} else {
+  cat("Both PubMed and Scopus data needed for comparison.\n")
+  cat("Run 0090_fetch_pubmed_data.Rmd first.\n")
+}
+```
+
+**Result**: Source comparison shows unique and overlapping articles.
+
+## Merge PubMed and Scopus Data
+
+Combine both sources and deduplicate.
+
+```{r merge-sources, eval=FALSE}
+# Merge and deduplicate datasets
+# Set eval=TRUE when both sources are fetched
+
+pubmed_file <- file.path(data_dir, "fusarium_pubmed_full.csv")
+scopus_file <- file.path(data_dir, "fusarium_scopus_full.csv")
+
+if (file.exists(pubmed_file) && file.exists(scopus_file)) {
+  cat("=== Merging PubMed and Scopus Data ===\n\n")
+
+  pubmed_data <- read_csv(pubmed_file, show_col_types = FALSE)
+  scopus_data <- read_csv(scopus_file, show_col_types = FALSE)
+
+  cat("Before merge:\n")
+  cat("  PubMed:", nrow(pubmed_data), "articles\n")
+  cat("  Scopus:", nrow(scopus_data), "articles\n")
+
+  # Standardize columns (keep common fields)
+  pubmed_standard <- pubmed_data %>%
+    select(id, title, abstract, keywords, authors, journal, pub_year, doi, source)
+
+  scopus_standard <- scopus_data %>%
+    select(id, title, abstract, keywords, authors, journal, pub_year, doi, source)
+
+  # Combine
+  combined <- bind_rows(pubmed_standard, scopus_standard)
+
+  cat("\nAfter combining:\n")
+  cat("  Total:", nrow(combined), "articles\n")
+
+  # Deduplicate by DOI (where available)
+  combined_dedupe <- combined %>%
+    mutate(doi_lower = tolower(doi)) %>%
+    group_by(doi_lower) %>%
+    slice(1) %>%  # Keep first occurrence
+    ungroup() %>%
+    select(-doi_lower)
+
+  cat("  After deduplication:", nrow(combined_dedupe), "articles\n")
+  cat("  Removed duplicates:", nrow(combined) - nrow(combined_dedupe), "\n")
+
+  # Save merged dataset
+  merged_file <- file.path(data_dir, "fusarium_combined_pubmed_scopus.csv")
+  write_csv(combined_dedupe, merged_file)
+  cat("\nSaved merged data to:", merged_file, "\n")
+
+  rds_file <- file.path(data_dir, "fusarium_combined_pubmed_scopus.rds")
+  saveRDS(combined_dedupe, rds_file)
+  cat("Saved as RDS:", rds_file, "\n")
+
+} else {
+  cat("Both PubMed and Scopus full datasets needed for merging.\n")
+}
+```
+
+**Result**: Combined dataset created with duplicates removed.
+
+## Next Steps
+
+1. **Merge with PubMed**: Run merge chunk above to combine both sources
+2. **Load combined data**: Use `0100_load_fusarium_data.Rmd` to load merged dataset
+3. **Preprocess**: Continue to preprocessing and extraction pipeline
+4. **Topic modeling**: Use combined data for LDA analysis
+
+## Notes
+
+### Scopus vs PubMed
+
+**Scopus advantages**:
+- Broader coverage (engineering, agriculture, social sciences)
+- Conference proceedings included
+- Citation counts for impact assessment
+- Author affiliation data
+
+**Scopus limitations**:
+- Requires API key (institutional access or trial)
+- More restrictive rate limits and quotas
+- Some abstracts may be truncated (use `scopus_get_abstracts()` for full text)
+
+### API Quotas
+
+Scopus API quotas vary by subscription:
+- **Free trial**: Limited requests per week
+- **Institutional**: Depends on agreement (typically 5,000-25,000 req/week)
+- Rate limit: 2-6 requests per second (depends on subscription)
+
+### Query Syntax
+
+Scopus uses field codes:
+- `TITLE()` - search titles only
+- `ABS()` - search abstracts only
+- `KEY()` - search keywords only
+- `TITLE-ABS-KEY()` - search all three fields
+- `AUTH()` - search authors
+- `AFFIL()` - search affiliations
+
+Example: `TITLE-ABS-KEY(fusarium) AND PUBYEAR > 2019 AND SUBJAREA(AGRI)`
+
+### Cost
+
+Scopus API requires institutional subscription or paid trial. Check with your library for access.

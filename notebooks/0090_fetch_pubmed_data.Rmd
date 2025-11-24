@@ -1,0 +1,405 @@
+---
+title: "Fetch Literature from PubMed"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+```
+
+## Fetching Data from PubMed
+
+This notebook demonstrates how to search and fetch literature from PubMed using NCBI E-utilities API. This is the first step in the data acquisition pipeline before loading data for extraction.
+
+### Purpose
+
+Instead of manually downloading CSV files, we can programmatically fetch scientific literature directly from PubMed. This enables:
+- Reproducible data collection
+- Automated updates with new publications
+- Custom search queries for specific research questions
+- Access to complete metadata (abstract, keywords, MeSH terms, etc.)
+
+## Load Required Functions
+
+Source the PubMed API functions and supporting libraries.
+
+```{r load-functions}
+# Source project functions
+source("../R/pubmed_api.R")
+source("../R/utils.R")
+
+# Libraries
+library(dplyr)
+library(tidyr)
+library(readr)
+
+# Set data directory
+data_dir <- "../data/fusarium"
+```
+
+**Result**: PubMed API functions loaded.
+
+## Check API Key
+
+Verify that PubMed API key is configured in .env file.
+
+```{r check-api-key}
+api_key <- Sys.getenv("PUB_MED_API_KEY")
+api_key_present <- nchar(api_key) > 0
+
+if (api_key_present) {
+  cat("✓ PubMed API key found\n")
+  cat("  Key length:", nchar(api_key), "characters\n")
+  cat("  Key preview:", substr(api_key, 1, 8), "...\n")
+  cat("  Rate limit: 10 requests/second (with key)\n")
+} else {
+  cat("✗ PubMed API key not found\n")
+  cat("\nTo get an API key:\n")
+  cat("1. Visit: https://www.ncbi.nlm.nih.gov/account/\n")
+  cat("2. Create NCBI account or log in\n")
+  cat("3. Go to Settings → API Key Management\n")
+  cat("4. Create new API key\n")
+  cat("5. Add to .env: PUB_MED_API_KEY=your_key_here\n")
+  cat("\nNote: API key is optional but increases rate limit from 3 to 10 req/sec\n")
+}
+```
+
+**Result**: API key status displayed. API key increases rate limit but is not required.
+
+## Test PubMed Search
+
+Test the search functionality with a small query to verify API connectivity.
+
+```{r test-search}
+cat("=== Testing PubMed Search ===\n\n")
+
+# Simple test query
+test_query <- "fusarium graminearum wheat"
+cat("Test query:", test_query, "\n\n")
+
+# Search with small limit
+test_pmids <- pubmed_search(
+  query = test_query,
+  retmax = 10,
+  api_key = api_key
+)
+
+cat("\nSearch results:\n")
+cat("  PMIDs found:", length(test_pmids), "\n")
+cat("  First 5 PMIDs:", paste(head(test_pmids, 5), collapse = ", "), "\n")
+```
+
+**Result**: PubMed search tested successfully. Connection verified.
+
+## Test Article Fetching
+
+Fetch full metadata for a few articles to verify data retrieval works.
+
+```{r test-fetch}
+cat("=== Testing Article Fetching ===\n\n")
+
+# Fetch first 5 articles
+test_articles <- pubmed_fetch(
+  pmids = head(test_pmids, 5),
+  api_key = api_key
+)
+
+cat("\nFetched", nrow(test_articles), "articles\n")
+cat("\nSample article:\n")
+cat(rep("-", 60), "\n", sep = "")
+
+# Show first article details
+article1 <- test_articles[1, ]
+cat("PMID:", article1$pmid, "\n")
+cat("Title:", article1$title, "\n")
+cat("Journal:", article1$journal, "\n")
+cat("Year:", article1$pub_year, "\n")
+cat("DOI:", article1$doi, "\n")
+cat("Abstract length:", nchar(article1$abstract), "characters\n")
+cat("Keywords:", article1$keywords, "\n")
+cat(rep("-", 60), "\n", sep = "")
+```
+
+**Result**: Article metadata fetched successfully. All fields present.
+
+## Construct Fusarium Research Query
+
+Build a comprehensive search query for Fusarium ecophysiology research.
+
+```{r build-query}
+# Query components
+fusarium_terms <- "(fusarium OR \"fusarium graminearum\" OR \"fusarium head blight\" OR FHB)"
+crop_terms <- "(wheat OR barley OR maize OR corn OR cereal OR grain)"
+abiotic_terms <- "(temperature OR water OR moisture OR humidity OR climate OR environment OR abiotic OR stress)"
+
+# Combine with Boolean logic
+fusarium_query <- paste(
+  fusarium_terms,
+  "AND",
+  crop_terms,
+  "AND",
+  abiotic_terms
+)
+
+cat("Fusarium Ecophysiology Query:\n")
+cat(rep("=", 70), "\n", sep = "")
+cat(strwrap(fusarium_query, width = 70), sep = "\n")
+cat(rep("=", 70), "\n", sep = "")
+```
+
+**Result**: Comprehensive query constructed targeting Fusarium ecophysiology on cereal crops with abiotic factors.
+
+## Preview Search Results
+
+Execute search to see how many articles match before fetching.
+
+```{r preview-search}
+cat("\n=== Preview Search Results ===\n\n")
+
+# Search with limit to see total count
+preview_pmids <- pubmed_search(
+  query = fusarium_query,
+  retmax = 100,  # Just preview, don't fetch thousands
+  api_key = api_key
+)
+
+# Extract total count from attributes
+total_count <- attr(preview_pmids, "count")
+
+cat("\nSearch Summary:\n")
+cat("  Query:", fusarium_query, "\n")
+cat("  Total articles in PubMed:", total_count, "\n")
+cat("  PMIDs retrieved (preview):", length(preview_pmids), "\n")
+cat("\nFirst 10 PMIDs:\n")
+print(head(preview_pmids, 10))
+```
+
+**Result**: Search executed. Total article count displayed.
+
+## Fetch Sample Dataset
+
+Fetch a manageable sample of articles for testing extraction pipeline.
+
+```{r fetch-sample, eval=FALSE}
+# Fetch 100 articles for testing
+# Set eval=TRUE to actually run this (may take 1-2 minutes)
+
+cat("=== Fetching Sample Dataset ===\n\n")
+cat("Fetching 100 articles from PubMed...\n")
+cat("This may take 1-2 minutes with API rate limiting.\n\n")
+
+sample_pmids <- pubmed_search(
+  query = fusarium_query,
+  retmax = 100,
+  api_key = api_key
+)
+
+sample_articles <- pubmed_fetch(
+  pmids = sample_pmids,
+  api_key = api_key
+)
+
+# Add unique ID
+sample_articles <- sample_articles %>%
+  mutate(id = paste0("PM_", pmid))
+
+cat("\n=== Fetch Complete ===\n")
+cat("Articles fetched:", nrow(sample_articles), "\n")
+cat("Columns:", ncol(sample_articles), "\n")
+cat("\nColumn names:\n")
+print(names(sample_articles))
+
+# Save to file
+output_file <- file.path(data_dir, "fusarium_pubmed_sample_100.csv")
+write_csv(sample_articles, output_file)
+cat("\nSaved to:", output_file, "\n")
+```
+
+**Result**: Sample dataset of 100 articles fetched and saved. Ready for extraction pipeline.
+
+## Fetch Full Dataset
+
+Fetch a larger dataset for production research.
+
+```{r fetch-full, eval=FALSE}
+# Fetch up to 1000 articles for research
+# WARNING: This will take 5-10 minutes with rate limiting
+# Set eval=TRUE only when ready to fetch full dataset
+
+cat("=== Fetching Full Dataset ===\n\n")
+cat("Fetching up to 1000 articles from PubMed...\n")
+cat("WARNING: This will take 5-10 minutes.\n\n")
+
+# Use convenience function
+fusarium_full <- fetch_fusarium_pubmed(
+  retmax = 1000,
+  api_key = api_key
+)
+
+cat("\n=== Fetch Complete ===\n")
+cat("Articles fetched:", nrow(fusarium_full), "\n")
+
+# Check data quality
+cat("\nData Quality Check:\n")
+cat("  Articles with abstracts:", sum(!is.na(fusarium_full$abstract)), "\n")
+cat("  Articles with keywords:", sum(!is.na(fusarium_full$keywords)), "\n")
+cat("  Articles with DOI:", sum(!is.na(fusarium_full$doi)), "\n")
+cat("  Year range:", min(fusarium_full$pub_year, na.rm = TRUE), "-",
+    max(fusarium_full$pub_year, na.rm = TRUE), "\n")
+
+# Save to file
+output_file <- file.path(data_dir, "fusarium_pubmed_full.csv")
+write_csv(fusarium_full, output_file)
+cat("\nSaved to:", output_file, "\n")
+
+# Also save as RDS for R
+rds_file <- file.path(data_dir, "fusarium_pubmed_full.rds")
+saveRDS(fusarium_full, rds_file)
+cat("Saved to:", rds_file, "\n")
+```
+
+**Result**: Full dataset fetched and saved in both CSV and RDS formats.
+
+## Inspect Fetched Data
+
+Examine the structure and quality of fetched articles.
+
+```{r inspect-data}
+# Load most recent saved file
+saved_files <- list.files(data_dir, pattern = "fusarium_pubmed.*\\.csv$", full.names = TRUE)
+
+if (length(saved_files) > 0) {
+  latest_file <- saved_files[which.max(file.info(saved_files)$mtime)]
+
+  cat("Loading:", latest_file, "\n")
+  articles <- read_csv(latest_file, show_col_types = FALSE)
+
+  cat("\n=== Dataset Overview ===\n")
+  cat("Articles:", nrow(articles), "\n")
+  cat("Columns:", ncol(articles), "\n\n")
+
+  # Check completeness
+  cat("Field Completeness:\n")
+  completeness <- sapply(articles, function(x) sum(!is.na(x)))
+  pct <- round(100 * completeness / nrow(articles), 1)
+
+  for (col in names(articles)) {
+    cat(sprintf("  %-15s %4d / %4d (%5.1f%%)\n",
+                col, completeness[col], nrow(articles), pct[col]))
+  }
+
+  # Year distribution
+  cat("\nPublication Years:\n")
+  year_dist <- articles %>%
+    filter(!is.na(pub_year)) %>%
+    count(pub_year) %>%
+    arrange(desc(pub_year)) %>%
+    head(10)
+  print(year_dist)
+
+  # Abstract lengths
+  cat("\nAbstract Lengths:\n")
+  articles <- articles %>%
+    mutate(abstract_length = nchar(abstract))
+
+  cat("  Mean:", round(mean(articles$abstract_length, na.rm = TRUE)), "characters\n")
+  cat("  Median:", median(articles$abstract_length, na.rm = TRUE), "characters\n")
+  cat("  Range:", min(articles$abstract_length, na.rm = TRUE), "-",
+      max(articles$abstract_length, na.rm = TRUE), "characters\n")
+
+} else {
+  cat("No PubMed data files found in", data_dir, "\n")
+  cat("Run the fetch chunks above to download articles.\n")
+}
+```
+
+**Result**: Dataset structure and quality inspected. Ready for preprocessing.
+
+## Data Quality Checks
+
+Identify potential issues in fetched data.
+
+```{r quality-checks}
+if (exists("articles") && nrow(articles) > 0) {
+
+  cat("=== Data Quality Checks ===\n\n")
+
+  # 1. Missing abstracts
+  missing_abstract <- articles %>%
+    filter(is.na(abstract) | nchar(abstract) < 50)
+
+  cat("Articles with missing/short abstracts:", nrow(missing_abstract), "\n")
+  if (nrow(missing_abstract) > 0) {
+    cat("  These articles may not be suitable for text extraction.\n")
+  }
+
+  # 2. Duplicate check
+  duplicates <- articles %>%
+    group_by(pmid) %>%
+    filter(n() > 1)
+
+  cat("Duplicate PMIDs:", nrow(duplicates), "\n")
+
+  # 3. Recent publications
+  recent <- articles %>%
+    filter(pub_year >= 2020)
+
+  cat("Recent articles (2020+):", nrow(recent), "\n")
+
+  # 4. Keyword coverage
+  with_keywords <- articles %>%
+    filter(!is.na(keywords) & nchar(keywords) > 0)
+
+  cat("Articles with keywords:", nrow(with_keywords),
+      sprintf("(%.1f%%)\n", 100 * nrow(with_keywords) / nrow(articles)))
+
+  # 5. MeSH terms coverage
+  with_mesh <- articles %>%
+    filter(!is.na(mesh_terms) & nchar(mesh_terms) > 0)
+
+  cat("Articles with MeSH terms:", nrow(with_mesh),
+      sprintf("(%.1f%%)\n", 100 * nrow(with_mesh) / nrow(articles)))
+
+  cat("\nData quality is",
+      ifelse(nrow(missing_abstract) < 0.1 * nrow(articles), "good", "acceptable"),
+      "for extraction pipeline.\n")
+}
+```
+
+**Result**: Quality checks completed. Dataset assessed for extraction readiness.
+
+## Next Steps
+
+1. **Fetch Scopus data**: Run `0095_fetch_scopus_data.Rmd` to get additional articles
+2. **Combine sources**: Merge PubMed and Scopus data, remove duplicates
+3. **Preprocess**: Continue to `0100_load_fusarium_data.Rmd` (modify to load fetched data instead of CSV)
+4. **Extract**: Proceed through extraction pipeline with newly fetched articles
+
+## Notes
+
+### API Rate Limits
+
+- **Without API key**: 3 requests per second
+- **With API key**: 10 requests per second
+- Batch fetching built into `pubmed_fetch()` handles rate limiting automatically
+
+### Query Syntax
+
+PubMed supports Boolean operators (AND, OR, NOT) and field tags:
+- `[Title]` - search in title only
+- `[Abstract]` - search in abstract only
+- `[MeSH Terms]` - search MeSH controlled vocabulary
+- `[Author]` - search by author name
+
+Example: `"fusarium head blight"[Title] AND wheat[Title/Abstract] AND 2020:2024[Publication Date]`
+
+### Cost
+
+PubMed E-utilities API is **free** with no usage fees. API key is free and only increases rate limit.
+
+### Data Storage
+
+Fetched data is saved to `data/fusarium/` directory:
+- CSV format for portability
+- RDS format for R (preserves data types)
+- Files are in `.gitignore` to avoid committing large datasets
