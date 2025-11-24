@@ -1,5 +1,7 @@
 # LLM-Based Text Extraction Research Project (R)
 
+> Legacy document: this was the original generic project overview. For the current, Fusarium-focused structure, see `README.md` and `dev/doc/main/system_description.md`.
+
 ## Overview
 This R project focuses on using Large Language Models (LLMs) for text extraction tasks. Students will explore various approaches to extract structured information from unstructured text data using R and modern NLP techniques.
 
