@@ -199,19 +199,32 @@ simple_gemini <- function(message,
 #' Extract with Retry Logic
 #'
 #' Wrapper for Fusarium extraction with built-in retry logic for rate limits.
+#' Requires retry_logic.R to be sourced first.
 #'
 #' @param ... Arguments passed to extract_fusarium_gemini
 #' @param max_attempts Maximum retry attempts (default: 5)
 #' @param base_delay Base delay in seconds (default: 2)
 #' @return List with extracted information
 #' @export
+#' @examples
+#' \dontrun{
+#' # Source required functions first
+#' source("R/retry_logic.R")
+#' source("R/gemini_extraction.R")
+#'
+#' # Then use with retry
+#' result <- extract_fusarium_with_retry(
+#'   abstract = "Study text...",
+#'   title = "Title"
+#' )
+#' }
 extract_fusarium_with_retry <- function(...,
                                         max_attempts = 5,
                                         base_delay = 2) {
 
-  # Source retry logic if not already loaded
+  # Check if retry logic is available
   if (!exists("retry_with_backoff")) {
-    source(system.file("R", "retry_logic.R", package = "2025_fhb_llm_extraction"))
+    stop("retry_with_backoff() not found. Please source R/retry_logic.R first.")
   }
 
   retry_with_backoff({

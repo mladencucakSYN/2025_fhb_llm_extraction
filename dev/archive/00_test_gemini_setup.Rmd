@@ -1,0 +1,184 @@
+---
+title: "Testing Gemini Setup"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Testing Gemini API Integration
+
+This notebook tests the basic Gemini API setup for the LLM extraction project.
+
+## 1. Set up Environment Variables
+
+Before running this notebook, you need to set up your Google API key. There are several ways to do this:
+
+### Option A: Create a .env file (Recommended)
+
+1. Create a file called `.env` in the project root directory
+2. Add your API key:
+```
+GOOGLE_API_KEY=your_actual_api_key_here
+```
+3. The `.env` file is already in `.gitignore` so it won't be committed to version control
+
+### Option B: Set environment variable in R
+
+You can set the environment variable directly in R (but this is temporary):
+
+```{r set-env, eval=FALSE}
+# Replace with your actual API key
+Sys.setenv(GOOGLE_API_KEY = "your_actual_api_key_here")
+```
+
+### Option C: Add to .Renviron file
+
+1. Create or edit `~/.Renviron` file in your home directory
+2. Add: `GOOGLE_API_KEY=your_actual_api_key_here`
+3. Restart R session
+
+## 2. Load Environment Variables
+
+```{r load-env}
+# Load environment variables from .env file if it exists
+if (file.exists(".env")) {
+  readRenviron(".env")
+}
+
+# Check if API key is set (without printing the actual key)
+api_key_set <- nchar(Sys.getenv("GOOGLE_API_KEY")) > 0
+cat("Google API key is", ifelse(api_key_set, "SET", "NOT SET"), "\n")
+```
+
+## 3. Define the Simple Gemini Function
+
+```{r gemini-function}
+# Install ellmer if needed
+if (!requireNamespace("ellmer", quietly = TRUE)) {
+  install.packages("ellmer")
+}
+
+# Simple Gemini function
+simple_gemini <- function(message, api_key = Sys.getenv("GOOGLE_API_KEY")) {
+  if (!requireNamespace("ellmer", quietly = TRUE)) {
+    stop("ellmer package not found")
+  }
+  
+  if (api_key == "") {
+    stop("Set GOOGLE_API_KEY environment variable")
+  }
+  
+  chat <- ellmer::chat_google_gemini(
+    model = "gemini-2.0-flash-exp",
+    api_key = api_key
+  )
+  
+  response <- chat$chat(message)
+  return(response)
+}
+```
+
+## 4. Test the Function
+
+```{r test-gemini}
+# Load ellmer library
+if (!requireNamespace("ellmer", quietly = TRUE)) {
+  install.packages("ellmer", repos = "https://cran.rstudio.com")
+}
+library(ellmer)
+
+# Only run test if API key is set
+if (api_key_set) {
+  cat("Testing Gemini API...\n\n")
+  
+  # Simple math test
+  response1 <- simple_gemini("What is 2+2? Give a brief answer.")
+  cat("Question: What is 2+2?\n")
+  cat("Response:", response1, "\n\n")
+  
+  # Text extraction test
+  sample_text <- "John Smith works at Acme Corp as a Data Scientist. His email is john.smith@acme.com and phone is (555) 123-4567."
+  
+  extraction_prompt <- paste(
+    "Extract the following information from this text and return as JSON:\n",
+    "- name\n",
+    "- company\n",
+    "- job_title\n",
+    "- email\n",
+    "- phone\n\n",
+    "Text:", sample_text
+  )
+  
+  response2 <- simple_gemini(extraction_prompt)
+  cat("Extraction test:\n")
+  cat("Response:", response2, "\n")
+  
+} else {
+  cat("⚠️  Cannot test Gemini API - GOOGLE_API_KEY not set\n")
+  cat("Please set your API key using one of the methods described above.\n")
+}
+```
+
+## 5. Save Function to Project
+
+```{r save-function}
+# Save the simple_gemini function to R/gemini.R for use in other scripts
+gemini_code <- '
+#\' Simple Gemini Chat Function
+#\' 
+#\' Basic function to interact with Google Gemini API
+#\' 
+#\' @param message Character string with the message/prompt
+#\' @param api_key Google API key (defaults to GOOGLE_API_KEY env var)
+#\' @return Character string with Gemini response
+simple_gemini <- function(message, api_key = Sys.getenv("GOOGLE_API_KEY")) {
+  if (!requireNamespace("ellmer", quietly = TRUE)) {
+    stop("ellmer package not found. Install with: install.packages(\\"ellmer\\")")
+  }
+  
+  if (api_key == "") {
+    stop("Set GOOGLE_API_KEY environment variable")
+  }
+  
+  chat <- ellmer::chat_google_gemini(
+    model = "gemini-2.0-flash-exp",
+    api_key = api_key
+  )
+  
+  response <- chat$chat(message)
+  return(response)
+}
+'
+
+# Write to R/gemini.R
+cat(gemini_code, file = "R/gemini.R")
+cat("✅ Function saved to R/gemini.R\n")
+```
+
+## Next Steps
+
+If the test was successful:
+
+1. ✅ Your Gemini API is working
+2. ✅ You can now use `simple_gemini()` in other notebooks
+3. ✅ The function is saved in `R/gemini.R` for reuse
+
+You can now proceed to the main extraction notebooks and use this function for LLM-based text extraction tasks.
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. **API Key Error**: Make sure your `GOOGLE_API_KEY` is correctly set
+2. **Package Error**: Install ellmer with `install.packages("ellmer")`
+3. **Network Error**: Check your internet connection
+4. **API Limit**: Check if you've exceeded your API quota
+
+## Getting a Google API Key
+
+1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Click "Create API Key"
+4. Copy the key and add it to your `.env` file

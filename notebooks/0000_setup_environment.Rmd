@@ -44,14 +44,17 @@ required_packages <- c(
   "ggplot2",       # Visualization
   "jsonlite",      # JSON parsing
   "readr",         # File reading
-  "purrr"          # Functional programming
+  "purrr",         # Functional programming
+  "tidytext",      # Text mining
+  "topicmodels",   # LDA topic modeling
+  "wordcloud"      # Word cloud visualizations
 )
 
 cat("Required packages:\n")
 print(required_packages)
 ```
 
-**Result**: List of eight required packages defined.
+**Result**: List of eleven required packages defined.
 
 ## Check Installed Packages
 
@@ -207,6 +210,7 @@ r_files <- c(
   "R/batch_processor.R",
   "R/cache_manager.R",
   "R/gemini_extraction.R",
+  "R/extractors.R",
   "R/evaluation.R"
 )
 

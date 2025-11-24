@@ -39,7 +39,7 @@ tmp/
 Thumbs.db
 
 # Local development scratchpad
-dev/
+dev/*
 !dev/*.md
 !dev/archive/
 
