@@ -44,7 +44,7 @@ data_dir <- "../data/fusarium"
 Verify that Scopus API key is configured in .env file.
 
 ```{r check-api-key}
-api_key <- Sys.getenv("SCOPUS_API_KEY")
+api_key <- Sys.getenv("ELSEVIER_API_KEY")
 api_key_present <- nchar(api_key) > 0
 
 if (api_key_present) {
@@ -58,7 +58,7 @@ if (api_key_present) {
   cat("2. Register for API key (requires institutional access or trial)\n")
   cat("3. Go to My API Key section\n")
   cat("4. Create API key\n")
-  cat("5. Add to .env: SCOPUS_API_KEY=your_key_here\n")
+  cat("5. Add to .env: ELSEVIER_API_KEY=your_key_here\n")
   cat("\nNote: Scopus API requires institutional access or free trial.\n")
   cat("      Rate limits and quotas vary by subscription level.\n")
 }
@@ -352,10 +352,12 @@ if (file.exists(pubmed_file) && file.exists(scopus_file)) {
 
   # Standardize columns (keep common fields)
   pubmed_standard <- pubmed_data %>%
-    select(id, title, abstract, keywords, authors, journal, pub_year, doi, source)
+    select(id, title, abstract, keywords, authors, journal, pub_year, doi, source) %>%
+    mutate(id = as.character(id))
 
   scopus_standard <- scopus_data %>%
-    select(id, title, abstract, keywords, authors, journal, pub_year, doi, source)
+    select(id, title, abstract, keywords, authors, journal, pub_year, doi, source) %>%
+    mutate(id = as.character(id))
 
   # Combine
   combined <- bind_rows(pubmed_standard, scopus_standard)

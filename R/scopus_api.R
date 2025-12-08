@@ -183,7 +183,7 @@ scopus_search_all <- function(query,
 
   all_articles <- list()
   current_start <- 0
-  count_per_request <- 200  # Scopus maximum
+  count_per_request <- 25  # Scopus maximum
 
   # Calculate number of requests needed
   n_requests <- ceiling(max_results / count_per_request)
