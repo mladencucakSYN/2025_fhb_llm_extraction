@@ -77,10 +77,9 @@ Define comprehensive text cleaning function.
 
 ```{r clean-function}
 clean_abstract_text <- function(text) {
-  if (is.na(text) || nchar(text) == 0) {
-    return("")
-  }
+ text <- ifelse(is.na(text), "", text)
 
+  
   text %>%
     # Remove newlines and tabs
     str_replace_all("[\r\n\t]+", " ") %>%

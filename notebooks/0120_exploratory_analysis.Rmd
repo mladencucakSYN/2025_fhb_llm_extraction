@@ -65,7 +65,7 @@ cat("Temporal Distribution:\n")
 cat(rep("-", 50), "\n", sep = "")
 
 temporal_summary <- valid_data %>%
-  count(year, sort = TRUE) %>%
+  count(pub_year, sort = TRUE) %>%
   mutate(
     cumulative = cumsum(n),
     pct_total = cumulative / sum(n) * 100
@@ -74,7 +74,7 @@ temporal_summary <- valid_data %>%
 print(head(temporal_summary, 10))
 
 # Plot publication trend
-ggplot(temporal_summary, aes(x = year, y = n)) +
+ggplot(temporal_summary, aes(x = pub_year, y = n)) +
   geom_line(color = "steelblue", size = 1) +
   geom_point(color = "steelblue", size = 2) +
   geom_smooth(method = "loess", se = TRUE, color = "red", linetype = "dashed") +
@@ -190,6 +190,8 @@ species_patterns <- c(
   "F\\. graminearum|Fusarium graminearum",
   "F\\. culmorum|Fusarium culmorum",
   "F\\. avenaceum|Fusarium avenaceum",
+  "F\\. equiseti|Fusarium equiseti",
+  "F\\. temperatum|Fusarium temperatum",
   "F\\. poae|Fusarium poae",
   "F\\. sporotrichioides|Fusarium sporotrichioides",
   "F\\. verticillioides|Fusarium verticillioides",
@@ -200,6 +202,8 @@ species_names <- c(
   "F. graminearum",
   "F. culmorum",
   "F. avenaceum",
+  "F. equiseti",
+  "F. temperatum",
   "F. poae",
   "F. sporotrichioides",
   "F. verticillioides",
@@ -292,7 +296,9 @@ climate_patterns <- c(
   "drought" = "\\bdrought",
   "climate change" = "\\bclimate change",
   "water stress" = "\\bwater stress",
-  "heat stress" = "\\bheat stress"
+  "heat stress" = "\\bheat stress",
+  "carbon dioxide|CO2" = "\\bcarbon dioxide|\\bCO2",
+  "light|UV" = "\\blight|\\bUV"
 )
 
 climate_counts <- tibble(
@@ -334,7 +340,13 @@ toxin_patterns <- c(
   "zearalenone|ZEN" = "\\bzearalenone|\\bZEN\\b",
   "T-2 toxin" = "\\bT-2\\b",
   "nivalenol|NIV" = "\\bnivalenol|\\bNIV\\b",
-  "fumonisin" = "\\bfumonisin"
+  "NX toxins|NX-2|NX-3" = "\\bNX toxins|bNX-2|bNX-3",
+  "fumonisin" = "\\bfumonisin",
+  "monoacetoxyscripenol|MAS" = "\\bmonoacetoxyscripenol|bMAS",
+  "enniatin|ENN" = "\\benniatin|bENN",
+  "beuavericin|BEA" = "bbeuavericin|bBEA",
+  "moniliformin|MON" = "bmoniliformin|bMON",
+  "fusaproliferin|FUS" = "bfusaproliferin|bFUS"
 )
 
 toxin_counts <- tibble(

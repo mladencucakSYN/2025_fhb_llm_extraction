@@ -21,10 +21,11 @@ load_config <- function() {
 #' @param text Character vector of text to clean
 #' @return Cleaned text
 clean_text <- function(text) {
+  
   text %>%
     stringr::str_trim() %>%
     stringr::str_squish() %>%
-    stringr::str_remove_all("[\\r\\n]+")
+    stringr::str_replace_all("[\\r\\n]+")
 }
 
 #' Save Results

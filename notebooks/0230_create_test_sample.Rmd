@@ -45,9 +45,9 @@ for (size in sample_sizes) {
   # Stratified sample across topics
   sample_data <- ecophys_data %>%
     group_by(topic) %>%
-    slice_sample(n = min(ceiling(size/6), n())) %>%  # Proportional sampling
+    slice_sample(n = min(ceiling(size/6), nrow(.))) %>%  # Proportional sampling
     ungroup() %>%
-    slice_sample(n = min(size, n()))  # Limit to target size
+    slice_sample(n = min(size, nrow(.)))  # Limit to target size
 
   # Save sample
   sample_file <- file.path(data_dir, sprintf("sample_%d_studies.rds", size))

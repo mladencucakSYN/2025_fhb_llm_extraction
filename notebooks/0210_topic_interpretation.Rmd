@@ -73,26 +73,26 @@ Based on the review above, assign interpretable labels to each topic.
 topic_labels <- tibble(
   topic = 1:20,
   label = c(
-    "General Fusarium Biology",                    # 1
-    "Temperature and Growth",                      # 2
-    "Wheat Pathology",                             # 3
-    "Fungicide Control",                           # 4
-    "Moisture and Infection",                      # 5
-    "DON Mycotoxin Production",                    # 6
-    "Field Studies and Epidemiology",              # 7
-    "Climate Factors",                             # 8
-    "Barley and Malt Quality",                     # 9
-    "Temperature Models",                          # 10
-    "Environmental Conditions",                    # 11
-    "Disease Severity Assessment",                 # 12
-    "Abiotic Stress Interactions",                 # 13
-    "Molecular Biology",                           # 14
-    "Crop Resistance",                             # 15
-    "Soil and Crop Rotation",                      # 16
-    "Maize Fusarium",                              # 17
-    "Food Safety and Regulations",                 # 18
-    "Prediction Models",                           # 19
-    "Management Practices"                         # 20
+    "Climate & Environmental Impacts",                      # 1
+    "Mycotoxin Contamination & Food Saftey",                # 2
+    "Maize Fusarium",                                       # 3
+    "Disease Control & Seed Control",                       # 4
+    "Biocontrol Agents & Antifungal Activity",              # 5
+    "Modelling",                                            # 6
+    "Soil Microbial Communities & Ecology",                 # 7
+    "Fusarium Identification & Diversity",                  # 8
+    "Genetic Resistance in Wheat",                          # 9
+    "Fungal Growth, Pathogenicity & Molecular Biology",     # 10
+    "Leaf Diseases & Wheat Cultivar Registration",          # 11
+    "Plant–Pathogen Interactions & Host Response",          # 12
+    "Gene Expression & Stress-Response Pathways",           # 13
+    "Metabolites, Toxins & Health-Related Effects",         # 14
+    "Fusarium Head Blight in Wheat",                        # 15
+    "Plant Stress Physiology & Growth Effects",             # 16
+    "Fusarium Growth Under Environmental Conditions",       # 17
+    "Grain Quality, Yield & Weather Impacts",               # 18
+    "Enzymes, Degradation & Chemical Properties",           # 19
+    "Soil Health, Cropping Systems & Root Diseases"         # 20
   )
 )
 
@@ -110,7 +110,7 @@ Group the 20 topics into 5 broader macro-themes.
 topic_labels <- topic_labels %>%
   mutate(
     macro_theme = case_when(
-      topic %in% c(2, 5, 8, 10, 11, 13) ~ "Ecophysiology & Abiotic Responses",
+      topic %in% c(1, 10, 12, 13, 16, 17, 18) ~ "Ecophysiology & Abiotic Responses",
       topic %in% c(3, 7, 12, 19) ~ "Disease Epidemiology",
       topic %in% c(4, 15, 16, 20) ~ "Disease Management",
       topic %in% c(6, 9, 17, 18) ~ "Mycotoxins & Food Safety",

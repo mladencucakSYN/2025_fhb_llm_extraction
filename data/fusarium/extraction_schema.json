@@ -1,0 +1,62 @@
+{
+  "version": "1.0",
+  "date": "2025-12-09",
+  "fields": {
+    "fusarium_species": {
+      "type": "array",
+      "description": "List of Fusarium species mentioned (e.g., F. graminearum, F. culmorum)",
+      "examples": ["Fusarium graminearum", "F. culmorum", "F. avenaceum"]
+    },
+    "crop": {
+      "type": "array",
+      "description": "Cereal crops studied",
+      "examples": ["wheat", "barley", "maize", "oats"]
+    },
+    "abiotic_factors": {
+      "type": "array",
+      "description": "Environmental/abiotic factors investigated",
+      "examples": ["temperature", "moisture", "humidity", "drought", "rainfall"]
+    },
+    "mycotoxins": {
+      "type": "array",
+      "description": "Mycotoxins studied or measured",
+      "examples": ["DON", "deoxynivalenol", "zearalenone", "nivalenol"]
+    },
+    "observed_effects": {
+      "type": "array",
+      "description": "Effects on crop or disease observed",
+      "examples": ["yield loss", "disease severity", "toxin production", "infection rate"]
+    },
+    "agronomic_practices": {
+      "type": "array",
+      "description": "Management or agronomic practices mentioned",
+      "examples": ["fungicide application", "crop rotation", "resistant cultivars", "tillage"]
+    },
+    "modeling": {
+      "type": "boolean",
+      "description": "Whether study involves predictive modeling or simulation",
+      "examples": ["true", "false"]
+    },
+    "study_type": {
+      "type": "array",
+      "description": "Type of study conducted",
+      "examples": ["field", "greenhouse", "laboratory", "modeling", "meta-analysis"]
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief 1-2 sentence summary of main findings",
+      "examples": "Temperature between 20-25°C optimized F. graminearum growth and DON production in wheat."
+    }
+  },
+  "json_template": {
+    "fusarium_species": [],
+    "crop": [],
+    "abiotic_factors": [],
+    "mycotoxins": [],
+    "observed_effects": [],
+    "agronomic_practices": [],
+    "modeling": false,
+    "study_type": [],
+    "summary": ""
+  }
+}

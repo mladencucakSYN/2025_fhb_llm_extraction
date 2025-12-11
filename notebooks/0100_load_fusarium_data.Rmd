@@ -260,12 +260,12 @@ cat("Publication Year Distribution:\n")
 cat(rep("-", 50), "\n", sep = "")
 
 year_counts <- fusarium_data %>%
-  count(year, sort = TRUE)
+  count(pub_year, sort = TRUE)
 
 print(year_counts)
 
 # Plot
-ggplot(year_counts, aes(x = year, y = n)) +
+ggplot(year_counts, aes(x = pub_year, y = n)) +
   geom_col(fill = "steelblue") +
   geom_text(aes(label = n), vjust = -0.5, size = 3) +
   labs(
@@ -288,13 +288,13 @@ cat("\nDatabase Source Distribution:\n")
 cat(rep("-", 50), "\n", sep = "")
 
 database_counts <- fusarium_data %>%
-  count(database, sort = TRUE) %>%
+  count(source, sort = TRUE) %>%
   mutate(percentage = n / sum(n) * 100)
 
 print(database_counts)
 
 # Plot
-ggplot(database_counts, aes(x = reorder(database, -n), y = n)) +
+ggplot(database_counts, aes(x = reorder(source, -n), y = n)) +
   geom_col(fill = "darkgreen") +
   geom_text(aes(label = sprintf("%d (%.1f%%)", n, percentage)),
             vjust = -0.5, size = 3) +

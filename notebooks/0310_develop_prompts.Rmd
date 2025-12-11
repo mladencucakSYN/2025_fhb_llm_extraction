@@ -39,6 +39,9 @@ Create comprehensive extraction prompt based on schema.
 ```{r build-prompt}
 build_extraction_prompt <- function(title, abstract, keywords = "") {
 
+  if (length(title) == 0 || is.na(title))       title    <- ""
+  if (length(abstract) == 0 || is.na(abstract)) abstract <- ""
+  if (length(keywords) == 0 || is.na(keywords)) keywords <- ""
   # Combine text
   full_text <- paste(
     if (nchar(title) > 0) paste("Title:", title) else "",
@@ -143,8 +146,10 @@ cat("\nResponse:\n")
 cat(response, "\n")
 
 # Try to parse JSON
+cleaned <- gsub("```|json", "", response)
+
 parsed <- tryCatch({
-  fromJSON(response)
+  fromJSON(cleaned)
 }, error = function(e) {
   cat("\n✗ JSON parsing failed:", conditionMessage(e), "\n")
   NULL
@@ -176,9 +181,10 @@ for (i in 1:5) {
     keywords = sample_10$keywords_clean[i]
   )
 
+  cleaned <- gsub("```|json", "", response)
   result <- tryCatch({
     response <- simple_gemini(prompt)
-    parsed <- fromJSON(response)
+    parsed <- fromJSON(cleaned)
     parsed$id <- sample_10$id[i]
     cat("  ✓ Success\n")
     parsed
