@@ -38,11 +38,11 @@ tmp/
 .DS_Store
 Thumbs.db
 
-# Local development scratchpad
-dev/*
-!dev/*.md
-!dev/archive/
-!dev/doc/
+# Local development scratchpad (NOT tracked - per global CLAUDE.md)
+dev/
+
+# Notebook rendered output
+*.nb.html
 
 # IDE files
 .vscode/
