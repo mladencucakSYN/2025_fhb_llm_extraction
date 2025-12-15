@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Aggregating Extraction Results
+## Overview
 
 This notebook aggregates all extraction results into analysis-ready datasets for research use.
+
+## Load Packages and Data
 
 ```{r load-packages}
 library(dplyr)
@@ -19,24 +22,18 @@ library(readr)
 data_dir <- "../data/fusarium"
 ```
 
-**Result**: Ready for aggregation.
-
-## Load All Extractions
-
 ```{r load-data}
 all_results <- readRDS(file.path(data_dir, "batch_extraction_results_demo.rds"))
 
-cat("✓ Loaded", nrow(all_results), "extraction results\n")
+tibble(
+  Dataset = "Extraction results",
+  Records = nrow(all_results)
+) %>% kable()
 ```
 
-**Result**: All extraction results loaded.
+## Create Document-Level Summary
 
-## Create Analysis Datasets
-
-Generate different views of the data for various analyses.
-
-```{r create-datasets}
-# Dataset 1: Document-level summary
+```{r document-summary}
 doc_summary <- all_results %>%
   mutate(
     n_species = sapply(fusarium_species, length),
@@ -47,14 +44,27 @@ doc_summary <- all_results %>%
     has_data = n_species > 0 | n_crops > 0 | n_abiotic > 0
   )
 
-cat("\nDocument-Level Summary:\n")
-cat("  Total documents:", nrow(doc_summary), "\n")
-cat("  With species:", sum(doc_summary$n_species > 0), "\n")
-cat("  With crops:", sum(doc_summary$n_crops > 0), "\n")
-cat("  With abiotic factors:", sum(doc_summary$n_abiotic > 0), "\n")
-cat("  Modeling studies:", sum(doc_summary$modeling), "\n")
+tibble(
+  Metric = c(
+    "Total documents",
+    "With species data",
+    "With crop data",
+    "With abiotic factors",
+    "Modeling studies"
+  ),
+  Count = c(
+    nrow(doc_summary),
+    sum(doc_summary$n_species > 0),
+    sum(doc_summary$n_crops > 0),
+    sum(doc_summary$n_abiotic > 0),
+    sum(doc_summary$modeling)
+  )
+) %>% kable()
+```
 
-# Dataset 2: Flattened species×crop combinations
+## Create Species-Crop Combinations
+
+```{r species-crop}
 species_crop <- all_results %>%
   select(id, fusarium_species, crop) %>%
   unnest(fusarium_species) %>%
@@ -65,13 +75,20 @@ species_crop <- all_results %>%
   )
 
 if (nrow(species_crop) > 0) {
-  cat("\nSpecies × Crop Combinations:\n")
-  cat("  Total combinations:", nrow(species_crop), "\n")
-  cat("  Unique species:", length(unique(species_crop$fusarium_species)), "\n")
-  cat("  Unique crops:", length(unique(species_crop$crop)), "\n")
+  tibble(
+    Metric = c("Total combinations", "Unique species", "Unique crops"),
+    Count = c(
+      nrow(species_crop),
+      n_distinct(species_crop$fusarium_species),
+      n_distinct(species_crop$crop)
+    )
+  ) %>% kable()
 }
+```
 
-# Dataset 3: Abiotic factors frequency
+## Create Abiotic Factors Dataset
+
+```{r abiotic-factors}
 abiotic_flat <- all_results %>%
   select(id, abiotic_factors) %>%
   unnest(abiotic_factors) %>%
@@ -79,70 +96,80 @@ abiotic_flat <- all_results %>%
 
 if (nrow(abiotic_flat) > 0) {
   abiotic_counts <- abiotic_flat %>%
-    count(abiotic_factors, sort = TRUE)
+    count(abiotic_factors, sort = TRUE) %>%
+    head(10)
 
-  cat("\nTop Abiotic Factors:\n")
-  print(head(abiotic_counts, 10))
+  abiotic_counts %>% kable(caption = "Top 10 Abiotic Factors")
 }
 ```
-
-**Result**: Multiple analysis-ready datasets created.
 
 ## Save Aggregated Datasets
 
 ```{r save-datasets}
+outputs <- tibble(
+  Dataset = character(),
+  Path = character(),
+  Records = integer()
+)
+
 # Save document summary
 write_csv(doc_summary, file.path(data_dir, "extraction_summary.csv"))
-cat("\n✓ Saved: extraction_summary.csv\n")
+outputs <- bind_rows(outputs, tibble(
+  Dataset = "Document summary",
+  Path = "extraction_summary.csv",
+  Records = nrow(doc_summary)
+))
 
 # Save species-crop combinations
 if (nrow(species_crop) > 0) {
   write_csv(species_crop, file.path(data_dir, "species_crop_combinations.csv"))
-  cat("✓ Saved: species_crop_combinations.csv\n")
+  outputs <- bind_rows(outputs, tibble(
+    Dataset = "Species-crop combinations",
+    Path = "species_crop_combinations.csv",
+    Records = nrow(species_crop)
+  ))
 }
 
 # Save abiotic factors
 if (nrow(abiotic_flat) > 0) {
   write_csv(abiotic_flat, file.path(data_dir, "abiotic_factors_long.csv"))
-  cat("✓ Saved: abiotic_factors_long.csv\n")
+  outputs <- bind_rows(outputs, tibble(
+    Dataset = "Abiotic factors",
+    Path = "abiotic_factors_long.csv",
+    Records = nrow(abiotic_flat)
+  ))
 }
 
 # Save complete structured data
-write_rds(all_results, file.path(data_dir, "extraction_results_final.rds"))
-cat("✓ Saved: extraction_results_final.rds\n")
+saveRDS(all_results, file.path(data_dir, "extraction_results_final.rds"))
+outputs <- bind_rows(outputs, tibble(
+  Dataset = "Complete results",
+  Path = "extraction_results_final.rds",
+  Records = nrow(all_results)
+))
+
+outputs %>% kable()
 ```
 
-**Result**: All analysis datasets saved for research use.
+## Dataset Uses
 
-## Summary
-
-```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║        RESULTS AGGREGATION COMPLETE                ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Analysis-Ready Datasets:\n")
-cat("  1. extraction_summary.csv - Document-level overview\n")
-cat("  2. species_crop_combinations.csv - Species×crop pairs\n")
-cat("  3. abiotic_factors_long.csv - Environmental factors\n")
-cat("  4. extraction_results_final.rds - Complete structured data\n\n")
-
-cat("These datasets can be used for:\n")
-cat("  - Statistical analysis\n")
-cat("  - Data visualization\n")
-cat("  - Meta-analysis\n")
-cat("  - Publication tables/figures\n\n")
-
-cat("Next: Research analysis in `0530_fusarium_analysis.Rmd`\n")
+```{r dataset-uses}
+tibble(
+  Dataset = c(
+    "extraction_summary.csv",
+    "species_crop_combinations.csv",
+    "abiotic_factors_long.csv",
+    "extraction_results_final.rds"
+  ),
+  `Use Case` = c(
+    "Document-level overview, quick filtering",
+    "Species-crop association analysis",
+    "Environmental factor frequency analysis",
+    "Complete data for custom analysis"
+  )
+) %>% kable()
 ```
-
-**Result**: All data aggregated and ready for research analysis.
 
 ## Next Steps
 
-1. ✓ Aggregated all extractions
-2. ✓ Created multiple analysis views
-3. ✓ Saved analysis-ready datasets
-4. Next: Perform research analysis in `0530_fusarium_analysis.Rmd`
+Proceed to `0530_fusarium_analysis.Rmd` for research analysis.

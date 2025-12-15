@@ -5,23 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
 ## Basic Text Extraction Concepts
 
-This notebook introduces fundamental concepts of text extraction using simple examples. We compare rule-based (regex) approaches with LLM-based extraction to understand the strengths and limitations of each method.
-
-### Learning Objectives
-
-- Understand structured vs. unstructured data
-- Implement rule-based extraction using regex patterns
-- Implement LLM-based extraction using Gemini
-- Compare extraction approaches
-- Evaluate extraction quality
+This notebook introduces fundamental concepts of text extraction using simple examples.
 
 ## Load Packages and Functions
-
-Load required packages for data manipulation and extraction.
 
 ```{r load-packages}
 library(dplyr)
@@ -29,436 +20,225 @@ library(stringr)
 library(ggplot2)
 library(jsonlite)
 
-# Load project functions
 source("../R/utils.R")
 source("../R/extractors.R")
 source("../R/evaluation.R")
 source("../R/gemini_extraction.R")
-
-cat("✓ Packages and functions loaded\n")
 ```
-
-**Result**: All required packages and functions are available.
 
 ## Create Sample Data
 
-Generate simple text samples containing contact information.
-
 ```{r create-data}
 sample_texts <- c(
-  "John Smith works at Acme Corp as a Data Scientist. His email is john.smith@acme.com and phone is (555) 123-4567.",
-  "Contact Sarah Johnson, Senior Developer at Tech Solutions Inc. Email: sarah.j@techsolutions.org, Phone: +1-555-987-6543.",
-  "Dr. Michael Brown is the Head of Research at Innovation Labs. His office number is (555) 111-2222 and email is mbrown@innovation.com.",
-  "Alice Wong, Marketing Manager, can be reached at alice.wong@marketing.co or 555-333-4444.",
-  "Professor David Lee (david.lee@university.edu) teaches at State University. Call him at 555-555-5555."
+ "John Smith works at Acme Corp as a Data Scientist. Email: john.smith@acme.com, phone: (555) 123-4567.",
+ "Contact Sarah Johnson, Senior Developer at Tech Solutions Inc. Email: sarah.j@techsolutions.org, Phone: +1-555-987-6543.",
+ "Dr. Michael Brown is Head of Research at Innovation Labs. Office: (555) 111-2222, email: mbrown@innovation.com.",
+ "Alice Wong, Marketing Manager, can be reached at alice.wong@marketing.co or 555-333-4444.",
+ "Professor David Lee (david.lee@university.edu) teaches at State University. Call: 555-555-5555."
 )
 
-cat("Created", length(sample_texts), "sample texts for extraction\n")
-cat("\nExample text:\n")
-cat(sample_texts[1], "\n")
+tibble(
+  ID = 1:length(sample_texts),
+  Text = substr(sample_texts, 1, 60)
+) %>% kable(caption = "Sample texts for extraction")
 ```
-
-**Result**: Five sample texts created containing names, emails, phone numbers, companies, and job titles.
 
 ## Rule-Based Extraction
 
-Extract structured information using regular expression patterns. This approach looks for specific text patterns.
-
 ```{r regex-patterns}
-# Define regex patterns for common entities
 patterns <- list(
   email = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
   phone = "\\+?1?[\\s-]?\\(?\\d{3}\\)?[\\s.-]?\\d{3}[\\s.-]?\\d{4}",
-  # Simple name pattern - captures Title FirstName LastName
-  name = "(?:Dr\\.|Prof\\.|Professor|Mr\\.|Ms\\.|Mrs\\.)?\\s*[A-Z][a-z]+\\s+[A-Z][a-z]+"
+  name = "(?:Dr\\.|Prof\\.|Professor)?\\s*[A-Z][a-z]+\\s+[A-Z][a-z]+"
 )
 
-cat("Defined regex patterns for extraction:\n")
-for (pattern_name in names(patterns)) {
-  cat(sprintf("  - %s: %s\n", pattern_name, substr(patterns[[pattern_name]], 1, 40)))
-}
+tibble(
+  Pattern = names(patterns),
+  Regex = sapply(patterns, function(x) substr(x, 1, 40))
+) %>% kable(caption = "Regex patterns")
 ```
-
-**Result**: Three regex patterns defined for emails, phone numbers, and names.
 
 ## Apply Rule-Based Extraction
 
-Extract information from all sample texts using the regex patterns.
-
 ```{r rule-based-extraction}
 rule_results <- extract_with_rules(sample_texts, patterns)
-
-cat("Rule-based extraction results:\n\n")
-print(rule_results)
+rule_results %>% kable()
 ```
-
-**Result**: Extracted information stored in a data frame with one row per input text.
 
 ## Analyze Rule-Based Results
 
-Examine what the rule-based approach captured.
-
 ```{r analyze-rules}
-cat("Rule-Based Extraction Summary:\n")
-cat(rep("-", 50), "\n", sep = "")
+rule_summary <- tibble(
+  Text = 1:nrow(rule_results),
+  Emails = sapply(rule_results$email, length),
+  Phones = sapply(rule_results$phone, length),
+  Names = sapply(rule_results$name, length)
+)
 
-for (i in 1:nrow(rule_results)) {
-  cat(sprintf("\nText %d:\n", i))
-  cat(sprintf("  Emails: %s\n",
-              ifelse(length(rule_results$email[[i]]) > 0,
-                     paste(rule_results$email[[i]], collapse = ", "),
-                     "None")))
-  cat(sprintf("  Phones: %s\n",
-              ifelse(length(rule_results$phone[[i]]) > 0,
-                     paste(rule_results$phone[[i]], collapse = ", "),
-                     "None")))
-  cat(sprintf("  Names: %s\n",
-              ifelse(length(rule_results$name[[i]]) > 0,
-                     paste(rule_results$name[[i]], collapse = ", "),
-                     "None")))
-}
+rule_summary %>% kable(caption = "Extraction counts per text")
 ```
-
-**Result**: Rule-based extraction successfully identified most emails and phones, but name extraction is imperfect.
 
 ## LLM-Based Extraction
 
-Extract the same information using Gemini LLM with a natural language prompt.
-
 ```{r llm-extraction}
-# Define extraction schema
 extraction_prompt_template <- '
-Extract the following information from this text:
-- name: Person\'s full name
-- email: Email address
-- phone: Phone number
-- company: Company/organization name
-- job_title: Person\'s job title or position
+Extract from this text and return as JSON:
+- name, email, phone, company, job_title
 
 Text: %s
 
-Return ONLY valid JSON in this format:
-{
-  "name": "",
-  "email": "",
-  "phone": "",
-  "company": "",
-  "job_title": ""
-}
-
-If any field is not found, use an empty string "".
+Return ONLY valid JSON with empty string "" for missing fields.
 '
 
-# Extract from each text
 llm_results <- list()
 
-cat("Extracting with Gemini LLM...\n")
 for (i in 1:length(sample_texts)) {
-  cat(sprintf("  Processing text %d/%d...\n", i, length(sample_texts)))
-
   prompt <- sprintf(extraction_prompt_template, sample_texts[i])
 
   response <- tryCatch({
     simple_gemini(prompt)
-  }, error = function(e) {
-    cat(sprintf("    Error: %s\n", conditionMessage(e)))
-    NULL
-  })
+  }, error = function(e) NULL)
 
   if (!is.null(response)) {
     parsed <- tryCatch({
       jsonlite::fromJSON(response)
-    }, error = function(e) {
-      cat(sprintf("    JSON parse error: %s\n", conditionMessage(e)))
-      NULL
-    })
+    }, error = function(e) NULL)
 
     if (!is.null(parsed)) {
       parsed$text_id <- i
       llm_results[[i]] <- parsed
-      cat("    ✓ Success\n")
     }
   }
 
-  # Small delay to avoid rate limits
   Sys.sleep(1)
 }
 
 llm_results_df <- dplyr::bind_rows(llm_results)
-
-cat("\nLLM extraction complete\n")
-print(llm_results_df)
+llm_results_df %>% kable(caption = "LLM extraction results")
 ```
-
-**Result**: LLM successfully extracted all five fields including company and job title which regex couldn't capture.
 
 ## Compare Extraction Methods
 
-Compare the results from rule-based and LLM-based approaches.
-
 ```{r comparison}
-cat("\n=== Comparison: Rule-Based vs. LLM ===\n\n")
-
-cat("Rule-Based Strengths:\n")
-cat("  ✓ Fast (no API calls)\n")
-cat("  ✓ Deterministic (same input = same output)\n")
-cat("  ✓ No cost\n")
-cat("  ✓ Works offline\n")
-
-cat("\nRule-Based Weaknesses:\n")
-cat("  ✗ Limited to pattern matching\n")
-cat("  ✗ Cannot extract complex entities (company, job title)\n")
-cat("  ✗ Patterns may miss variations\n")
-cat("  ✗ Requires pattern engineering\n")
-
-cat("\n")
-cat(rep("-", 50), "\n", sep = "")
-cat("\n")
-
-cat("LLM-Based Strengths:\n")
-cat("  ✓ Understands context and meaning\n")
-cat("  ✓ Can extract complex information\n")
-cat("  ✓ Handles variations naturally\n")
-cat("  ✓ Single prompt for multiple fields\n")
-
-cat("\nLLM-Based Weaknesses:\n")
-cat("  ✗ Slower (API latency)\n")
-cat("  ✗ Costs money (API calls)\n")
-cat("  ✗ Non-deterministic (may vary slightly)\n")
-cat("  ✗ Requires internet connectivity\n")
-cat("  ✗ Subject to rate limits\n")
+tibble(
+  Aspect = c(
+    "Speed", "Cost", "Determinism", "Offline",
+    "Pattern matching", "Context understanding", "Complex entities"
+  ),
+  `Rule-Based` = c(
+    "Fast", "Free", "Yes", "Yes",
+    "Strong", "None", "Cannot extract"
+  ),
+  `LLM-Based` = c(
+    "Slow (API)", "Per-call cost", "No", "No",
+    "Good", "Strong", "Can extract"
+  )
+) %>% kable(caption = "Method comparison")
 ```
-
-**Result**: Each approach has distinct trade-offs between speed, cost, and extraction capability.
 
 ## Define Ground Truth
 
-Create ground truth data to evaluate extraction quality.
-
 ```{r ground-truth}
 ground_truth <- list(
-  list(
-    name = "John Smith",
-    email = "john.smith@acme.com",
-    phone = "(555) 123-4567",
-    company = "Acme Corp",
-    job_title = "Data Scientist"
-  ),
-  list(
-    name = "Sarah Johnson",
-    email = "sarah.j@techsolutions.org",
-    phone = "+1-555-987-6543",
-    company = "Tech Solutions Inc",
-    job_title = "Senior Developer"
-  ),
-  list(
-    name = "Michael Brown",
-    email = "mbrown@innovation.com",
-    phone = "(555) 111-2222",
-    company = "Innovation Labs",
-    job_title = "Head of Research"
-  ),
-  list(
-    name = "Alice Wong",
-    email = "alice.wong@marketing.co",
-    phone = "555-333-4444",
-    company = NA,  # Not mentioned
-    job_title = "Marketing Manager"
-  ),
-  list(
-    name = "David Lee",
-    email = "david.lee@university.edu",
-    phone = "555-555-5555",
-    company = "State University",
-    job_title = "Professor"
-  )
+  list(name="John Smith", email="john.smith@acme.com", phone="(555) 123-4567",
+       company="Acme Corp", job_title="Data Scientist"),
+  list(name="Sarah Johnson", email="sarah.j@techsolutions.org", phone="+1-555-987-6543",
+       company="Tech Solutions Inc", job_title="Senior Developer"),
+  list(name="Michael Brown", email="mbrown@innovation.com", phone="(555) 111-2222",
+       company="Innovation Labs", job_title="Head of Research"),
+  list(name="Alice Wong", email="alice.wong@marketing.co", phone="555-333-4444",
+       company=NA, job_title="Marketing Manager"),
+  list(name="David Lee", email="david.lee@university.edu", phone="555-555-5555",
+       company="State University", job_title="Professor")
 )
 
 ground_truth_df <- dplyr::bind_rows(ground_truth)
-ground_truth_df$text_id <- 1:5
+ground_truth_df$text_id <- seq_len(nrow(ground_truth_df))
 
-cat("Ground truth data defined for evaluation\n")
+ground_truth_df %>% kable(caption = "Ground truth data")
 ```
-
-**Result**: Manual ground truth created for all five sample texts.
 
 ## Evaluate Email Extraction
 
-Compare email extraction accuracy between methods.
-
 ```{r eval-email}
-cat("=== Email Extraction Evaluation ===\n\n")
-
-# Rule-based emails
 rule_emails <- unlist(rule_results$email)
-cat("Rule-based extracted:", length(rule_emails), "emails\n")
-cat("  ", paste(rule_emails, collapse = ", "), "\n\n")
-
-# LLM emails
 llm_emails <- llm_results_df$email[llm_results_df$email != ""]
-cat("LLM extracted:", length(llm_emails), "emails\n")
-cat("  ", paste(llm_emails, collapse = ", "), "\n\n")
-
-# Ground truth emails
 true_emails <- ground_truth_df$email
-cat("Ground truth:", length(true_emails), "emails\n")
-cat("  ", paste(true_emails, collapse = ", "), "\n\n")
 
-# Calculate accuracy
 rule_email_metrics <- calculate_metrics(list(rule_emails), list(true_emails))
 llm_email_metrics <- calculate_metrics(list(llm_emails), list(true_emails))
 
-cat("Rule-based email extraction:\n")
-cat(sprintf("  Precision: %.2f\n", rule_email_metrics$precision))
-cat(sprintf("  Recall:    %.2f\n", rule_email_metrics$recall))
-cat(sprintf("  F1 Score:  %.2f\n\n", rule_email_metrics$f1))
-
-cat("LLM email extraction:\n")
-cat(sprintf("  Precision: %.2f\n", llm_email_metrics$precision))
-cat(sprintf("  Recall:    %.2f\n", llm_email_metrics$recall))
-cat(sprintf("  F1 Score:  %.2f\n", llm_email_metrics$f1))
+tibble(
+  Method = c("Rule-based", "LLM-based"),
+  Precision = c(rule_email_metrics$precision, llm_email_metrics$precision),
+  Recall = c(rule_email_metrics$recall, llm_email_metrics$recall),
+  F1 = c(rule_email_metrics$f1, llm_email_metrics$f1)
+) %>% kable(caption = "Email extraction metrics")
 ```
-
-**Result**: Both methods achieved high accuracy for email extraction, demonstrating that simple regex patterns work well for standardized formats.
 
 ## Evaluate Complex Fields
 
-Evaluate extraction of fields that require understanding context.
-
 ```{r eval-complex}
-cat("\n=== Complex Field Evaluation ===\n\n")
-
-# Company name extraction (LLM only - regex doesn't extract this)
 llm_companies <- llm_results_df$company[llm_results_df$company != ""]
 true_companies <- ground_truth_df$company[!is.na(ground_truth_df$company)]
 
-cat("Company Extraction:\n")
-cat("  LLM extracted:", length(llm_companies), "companies\n")
-cat("  Ground truth:", length(true_companies), "companies\n")
-
-# Simple match count (exact matching)
-matches <- sum(tolower(llm_companies) %in% tolower(true_companies))
-cat(sprintf("  Exact matches: %d/%d (%.1f%%)\n\n",
-            matches, length(true_companies),
-            matches/length(true_companies)*100))
-
-# Job title extraction
 llm_titles <- llm_results_df$job_title[llm_results_df$job_title != ""]
 true_titles <- ground_truth_df$job_title
 
-cat("Job Title Extraction:\n")
-cat("  LLM extracted:", length(llm_titles), "job titles\n")
-cat("  Ground truth:", length(true_titles), "job titles\n")
-
-matches <- sum(tolower(llm_titles) %in% tolower(true_titles))
-cat(sprintf("  Exact matches: %d/%d (%.1f%%)\n",
-            matches, length(true_titles),
-            matches/length(true_titles)*100))
+tibble(
+  Field = c("Company", "Job Title"),
+  `LLM Extracted` = c(length(llm_companies), length(llm_titles)),
+  `Ground Truth` = c(length(true_companies), length(true_titles)),
+  `Exact Matches` = c(
+    sum(tolower(llm_companies) %in% tolower(true_companies)),
+    sum(tolower(llm_titles) %in% tolower(true_titles))
+  )
+) %>% kable(caption = "Complex field extraction")
 ```
 
-**Result**: LLM successfully extracted complex contextual information that rule-based methods cannot capture.
-
-## Visualize Performance
-
-Create a visualization comparing extraction method performance.
+## Performance Visualization
 
 ```{r visualize}
-# Create comparison data
 comparison_data <- tibble(
   method = rep(c("Rule-Based", "LLM-Based"), each = 3),
   metric = rep(c("Precision", "Recall", "F1"), 2),
   value = c(
-    rule_email_metrics$precision,
-    rule_email_metrics$recall,
-    rule_email_metrics$f1,
-    llm_email_metrics$precision,
-    llm_email_metrics$recall,
-    llm_email_metrics$f1
+    rule_email_metrics$precision, rule_email_metrics$recall, rule_email_metrics$f1,
+    llm_email_metrics$precision, llm_email_metrics$recall, llm_email_metrics$f1
   )
 )
 
-# Plot
 ggplot(comparison_data, aes(x = method, y = value, fill = metric)) +
   geom_col(position = "dodge") +
   scale_y_continuous(limits = c(0, 1), labels = scales::percent) +
   labs(
-    title = "Email Extraction Performance Comparison",
-    subtitle = "Comparing Rule-Based vs. LLM-Based Approaches",
-    x = "Extraction Method",
-    y = "Score",
-    fill = "Metric"
+    title = "Email Extraction Performance",
+    x = "Method", y = "Score", fill = "Metric"
   ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(face = "bold"),
-    legend.position = "bottom"
-  )
+  theme_minimal()
 ```
-
-**Result**: Visualization shows comparable performance for simple email extraction between both methods.
 
 ## Key Takeaways
 
-Important lessons from this toy example.
-
 ```{r takeaways}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║            KEY TAKEAWAYS                           ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("1. Rule-Based Extraction:\n")
-cat("   - Best for well-defined, structured patterns\n")
-cat("   - Use for emails, phone numbers, dates, IDs\n")
-cat("   - Fast and cost-effective\n\n")
-
-cat("2. LLM-Based Extraction:\n")
-cat("   - Best for complex, contextual information\n")
-cat("   - Use for job titles, companies, relationships\n")
-cat("   - Slower but more flexible\n\n")
-
-cat("3. Hybrid Approach:\n")
-cat("   - Use regex for simple fields\n")
-cat("   - Use LLM for complex fields\n")
-cat("   - Balances speed, cost, and accuracy\n\n")
-
-cat("4. Evaluation is Critical:\n")
-cat("   - Always compare against ground truth\n")
-cat("   - Measure precision, recall, and F1\n")
-cat("   - Both methods can make errors\n")
+tibble(
+  Approach = c("Rule-Based", "LLM-Based", "Hybrid"),
+  `Best For` = c(
+    "Well-defined patterns (emails, phones, dates)",
+    "Complex contextual information (companies, titles)",
+    "Balance of speed, cost, and accuracy"
+  ),
+  Recommendation = c(
+    "Use for structured, standardized fields",
+    "Use for semantic understanding tasks",
+    "Combine both methods in production"
+  )
+) %>% kable()
 ```
-
-**Result**: Core extraction concepts established for application to real research data.
 
 ## Next Steps
 
-1. ✓ Understand basic extraction concepts
-2. ✓ Compare rule-based vs. LLM extraction
-3. Next: Learn error handling in `0030_error_handling_basics.Rmd`
-4. Then: Apply to real Fusarium research data (notebooks 0100+)
-
-## Practice Exercises
-
-Try these exercises to reinforce learning:
-
-### Exercise 1: Add New Patterns
-Add regex patterns to extract:
-- URLs (http:// or https://)
-- Dates (MM/DD/YYYY format)
-- Zip codes (5-digit US format)
-
-### Exercise 2: Modify LLM Prompt
-Modify the LLM extraction prompt to also extract:
-- Years of experience
-- Education level
-- Skills/expertise areas
-
-### Exercise 3: Create Your Own Data
-Create 3 new sample texts with different structures and test both extraction methods.
-
-### Exercise 4: Calculate More Metrics
-Extend the evaluation to calculate:
-- Accuracy for each field separately
-- Error analysis (what was missed?)
-- Confusion matrix for binary classification
+1. Understand basic extraction concepts
+2. Compare rule-based vs. LLM extraction
+3. Learn error handling in `0030_error_handling_basics.Rmd`
+4. Apply to real Fusarium research data

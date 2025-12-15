@@ -1,6 +1,8 @@
 ---
 title: "Fetch Literature from PubMed"
 output: html_document
+execute:
+  eval: false
 ---
 
 ```{r setup, include=FALSE}

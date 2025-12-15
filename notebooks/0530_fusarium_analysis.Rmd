@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Research Analysis of Extracted Data
+## Overview
 
 This notebook performs the final research analysis on extracted Fusarium data, answering key questions about climate-disease interactions.
+
+## Load Packages and Data
 
 ```{r load-packages}
 library(dplyr)
@@ -20,37 +23,26 @@ library(readr)
 data_dir <- "../data/fusarium"
 ```
 
-**Result**: Ready for research analysis.
-
-## Load Analysis Datasets
-
 ```{r load-data}
 doc_summary <- read_csv(file.path(data_dir, "extraction_summary.csv"))
 species_crop <- read_csv(file.path(data_dir, "species_crop_combinations.csv"))
 abiotic_factors <- read_csv(file.path(data_dir, "abiotic_factors_long.csv"))
 
-cat("✓ Loaded analysis datasets\n")
-cat("  Documents:", nrow(doc_summary), "\n")
-cat("  Species-crop combinations:", nrow(species_crop), "\n")
-cat("  Abiotic factor mentions:", nrow(abiotic_factors), "\n")
+tibble(
+  Dataset = c("Documents", "Species-crop combinations", "Abiotic factor mentions"),
+  Records = c(nrow(doc_summary), nrow(species_crop), nrow(abiotic_factors))
+) %>% kable()
 ```
 
-**Result**: Analysis datasets loaded.
+## RQ1: Fusarium Species × Crop Associations
 
-## Research Question 1: Which Fusarium Species on Which Crops?
-
-```{r rq1-species-crop}
-cat("\n=== RQ1: Fusarium Species × Crop Associations ===\n\n")
-
-# Top species-crop combinations
+```{r rq1-species-crop, fig.width=10, fig.height=6}
 top_combinations <- species_crop %>%
   count(fusarium_species, crop, sort = TRUE) %>%
   head(15)
 
-print(top_combinations)
-
-# Visualize
-ggplot(head(top_combinations, 10), aes(x = reorder(paste(fusarium_species, crop, sep = " on "), n), y = n)) +
+ggplot(head(top_combinations, 10),
+       aes(x = reorder(paste(fusarium_species, "on", crop), n), y = n)) +
   geom_col(fill = "darkgreen") +
   coord_flip() +
   labs(
@@ -59,21 +51,16 @@ ggplot(head(top_combinations, 10), aes(x = reorder(paste(fusarium_species, crop,
     y = "Number of Studies"
   ) +
   theme_minimal()
+
+top_combinations %>% kable()
 ```
 
-**Result**: F. graminearum on wheat is the dominant species-crop combination.
+## RQ2: Abiotic Factors Studied
 
-## Research Question 2: Which Abiotic Factors Are Most Studied?
-
-```{r rq2-abiotic}
-cat("\n=== RQ2: Abiotic Factors in Fusarium Research ===\n\n")
-
+```{r rq2-abiotic, fig.width=10, fig.height=5}
 abiotic_counts <- abiotic_factors %>%
   count(abiotic_factors, sort = TRUE)
 
-print(head(abiotic_counts, 15))
-
-# Visualize
 ggplot(head(abiotic_counts, 10), aes(x = reorder(abiotic_factors, n), y = n)) +
   geom_col(fill = "skyblue") +
   coord_flip() +
@@ -83,112 +70,112 @@ ggplot(head(abiotic_counts, 10), aes(x = reorder(abiotic_factors, n), y = n)) +
     y = "Number of Studies"
   ) +
   theme_minimal()
+
+abiotic_counts %>% head(15) %>% kable()
 ```
 
-**Result**: Temperature and moisture are the most frequently studied abiotic factors.
-
-## Research Question 3: What Is the Role of Modeling?
+## RQ3: Role of Predictive Modeling
 
 ```{r rq3-modeling}
-cat("\n=== RQ3: Predictive Modeling in Fusarium Research ===\n\n")
-
 modeling_summary <- doc_summary %>%
   summarise(
     total = n(),
     modeling_studies = sum(modeling),
-    modeling_pct = modeling_studies / total * 100
+    modeling_pct = round(modeling_studies / total * 100, 1)
   )
 
-cat("Modeling Studies:\n")
-cat("  Total:", modeling_summary$total, "\n")
-cat("  With modeling:", modeling_summary$modeling_studies, "\n")
-cat("  Percentage:", round(modeling_summary$modeling_pct, 1), "%\n")
+tibble(
+  Metric = c("Total studies", "Modeling studies", "Percentage"),
+  Value = c(
+    modeling_summary$total,
+    modeling_summary$modeling_studies,
+    paste0(modeling_summary$modeling_pct, "%")
+  )
+) %>% kable()
 ```
 
-**Result**: Significant proportion of studies involve predictive modeling.
-
-## Research Question 4: Co-occurrence of Factors
+## RQ4: Factor Co-occurrence
 
 ```{r rq4-cooccurrence}
-cat("\n=== RQ4: Co-occurrence of Temperature and Moisture ===\n\n")
-
 all_results <- readRDS(file.path(data_dir, "extraction_results_final.rds"))
 
 cooccurrence <- all_results %>%
   mutate(
     has_temp = sapply(abiotic_factors, function(x) any(grepl("temp", tolower(x)))),
-    has_moisture = sapply(abiotic_factors, function(x) any(grepl("moisture|humid|water", tolower(x))))
+    has_moisture = sapply(abiotic_factors, function(x) {
+      any(grepl("moisture|humid|water", tolower(x)))
+    })
   ) %>%
   count(has_temp, has_moisture)
 
-cat("Factor Co-occurrence:\n")
-print(cooccurrence)
-
-# Studies with both
-both_count <- cooccurrence %>%
-  filter(has_temp, has_moisture) %>%
-  pull(n)
-
-if (length(both_count) > 0) {
-  cat("\n✓", both_count, "studies examine both temperature and moisture\n")
-  cat("  These are key for understanding climate-disease interactions\n")
-}
+cooccurrence %>%
+  mutate(
+    Temperature = ifelse(has_temp, "Yes", "No"),
+    Moisture = ifelse(has_moisture, "Yes", "No")
+  ) %>%
+  select(Temperature, Moisture, n) %>%
+  kable(caption = "Temperature and Moisture Co-occurrence")
 ```
 
-**Result**: Many studies examine multiple abiotic factors jointly.
+## Key Findings Summary
 
-## Summary for Publication
-
-```{r publication-summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║        RESEARCH ANALYSIS COMPLETE                  ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Key Findings:\n\n")
-
-cat("1. Species-Crop Patterns:\n")
-cat("   - F. graminearum on wheat is dominant\n")
-cat("   - Multiple Fusarium species per crop\n")
-cat("   - Wheat and barley most studied\n\n")
-
-cat("2. Abiotic Factors:\n")
-cat("   - Temperature: Primary factor studied\n")
-cat("   - Moisture/humidity: Second most common\n")
-cat("   - Climate change context increasing\n\n")
-
-cat("3. Research Approaches:\n")
-cat("   - Significant use of predictive modeling\n")
-cat("   - Integration of multiple factors\n")
-cat("   - Focus on climate-disease interactions\n\n")
-
-cat("4. Implications:\n")
-cat("   - Climate warming affects Fusarium dynamics\n")
-cat("   - Moisture patterns critical for disease\n")
-cat("   - Need for integrated management strategies\n")
+```{r key-findings}
+tibble(
+  Finding = c(
+    "Dominant species-crop",
+    "Primary abiotic factor",
+    "Secondary abiotic factor",
+    "Modeling prevalence"
+  ),
+  Result = c(
+    ifelse(nrow(top_combinations) > 0,
+           paste(top_combinations$fusarium_species[1], "on", top_combinations$crop[1]),
+           "N/A"),
+    ifelse(nrow(abiotic_counts) > 0, abiotic_counts$abiotic_factors[1], "N/A"),
+    ifelse(nrow(abiotic_counts) > 1, abiotic_counts$abiotic_factors[2], "N/A"),
+    paste0(modeling_summary$modeling_pct, "% of studies")
+  )
+) %>% kable()
 ```
 
-**Result**: Research analysis completed with publication-ready findings.
+## Research Implications
 
-## Next Steps
-
-1. ✓ Analyzed species-crop associations
-2. ✓ Identified key abiotic factors
-3. ✓ Assessed modeling prevalence
-4. ✓ Examined factor co-occurrence
+```{r implications}
+tibble(
+  Area = c(
+    "Species-Crop Patterns",
+    "Abiotic Factors",
+    "Research Approaches",
+    "Climate Implications"
+  ),
+  Implication = c(
+    "F. graminearum on wheat dominates research; multiple species per crop",
+    "Temperature primary factor; moisture/humidity secondary",
+    "Significant use of predictive modeling; integration of multiple factors",
+    "Climate warming affects Fusarium dynamics; moisture patterns critical"
+  )
+) %>% kable()
+```
 
 ## Future Analysis Directions
 
-- Temporal trends in research focus
-- Geographic patterns in Fusarium species
-- Mycotoxin production under climate scenarios
-- Management strategy effectiveness
-- Meta-analysis of quantitative results
+```{r future-directions}
+tibble(
+  Direction = c(
+    "Temporal trends in research focus",
+    "Geographic patterns in Fusarium species",
+    "Mycotoxin production under climate scenarios",
+    "Management strategy effectiveness",
+    "Meta-analysis of quantitative results"
+  ),
+  Priority = c("High", "Medium", "High", "Medium", "Low")
+) %>% kable()
+```
 
 ## Publication Outputs
 
 The extracted and analyzed data can support:
+
 - Systematic review manuscript
 - Meta-analysis of climate effects
 - Database for modeling studies

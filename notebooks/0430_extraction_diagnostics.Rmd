@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Analyzing Extraction Performance
+## Overview
 
 This notebook analyzes extraction results to identify errors, assess quality, and determine which documents need retry.
+
+## Load Packages and Data
 
 ```{r load-packages}
 library(dplyr)
@@ -20,26 +23,18 @@ data_dir <- "../data/fusarium"
 cache_dir <- "../data/cache"
 ```
 
-**Result**: Ready for diagnostic analysis.
-
-## Load Extraction Results
-
 ```{r load-results}
-# Load all cached extractions
 all_results <- readRDS(file.path(data_dir, "batch_extraction_results_demo.rds"))
 
-cat("✓ Loaded", nrow(all_results), "extraction results\n")
+tibble(
+  Dataset = "Extraction results",
+  Records = nrow(all_results)
+) %>% kable()
 ```
-
-**Result**: Extraction results loaded for analysis.
 
 ## Field Completion Analysis
 
-Analyze how many extractions have data in each field.
-
-```{r field-completion}
-cat("\n=== Field Completion Analysis ===\n\n")
-
+```{r field-completion, fig.width=10, fig.height=5}
 completion_stats <- all_results %>%
   summarise(
     total = n(),
@@ -52,14 +47,11 @@ completion_stats <- all_results %>%
     has_summary = sum(nchar(summary) > 10)
   ) %>%
   pivot_longer(-total, names_to = "field", values_to = "count") %>%
-  mutate(percentage = count / total * 100)
+  mutate(percentage = round(count / total * 100, 1))
 
-print(completion_stats)
-
-# Plot
 ggplot(completion_stats, aes(x = reorder(field, -percentage), y = percentage)) +
   geom_col(fill = "steelblue") +
-  geom_text(aes(label = sprintf("%.1f%%", percentage)), vjust = -0.5) +
+  geom_text(aes(label = paste0(percentage, "%")), vjust = -0.5) +
   labs(
     title = "Field Completion Rates",
     x = "Field",
@@ -67,13 +59,11 @@ ggplot(completion_stats, aes(x = reorder(field, -percentage), y = percentage)) +
   ) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+completion_stats %>% kable()
 ```
 
-**Result**: Most critical fields (species, crop, abiotic factors) have high completion rates.
-
-## Identify Empty Extractions
-
-Find documents where extraction failed or returned no data.
+## Empty Extractions
 
 ```{r empty-extractions}
 all_results <- all_results %>%
@@ -84,23 +74,20 @@ all_results <- all_results %>%
   )
 
 empty_count <- sum(all_results$is_empty)
-cat("\nEmpty Extractions:\n")
-cat("  Count:", empty_count, "\n")
-cat("  Percentage:", round(empty_count / nrow(all_results) * 100, 1), "%\n")
 
-if (empty_count > 0) {
-  cat("\n⚠ These documents may need manual review or retry\n")
-}
+tibble(
+  Metric = c("Empty extractions", "Percentage", "Status"),
+  Value = c(
+    empty_count,
+    paste0(round(empty_count / nrow(all_results) * 100, 1), "%"),
+    ifelse(empty_count == 0, "All OK", "Review needed")
+  )
+) %>% kable()
 ```
-
-**Result**: Empty extractions identified for follow-up.
 
 ## Species Distribution
 
-Analyze which Fusarium species were most frequently extracted.
-
-```{r species-distribution}
-# Flatten species arrays
+```{r species-distribution, fig.width=10, fig.height=5}
 species_flat <- all_results %>%
   select(id, fusarium_species) %>%
   tidyr::unnest(fusarium_species) %>%
@@ -108,39 +95,61 @@ species_flat <- all_results %>%
 
 if (nrow(species_flat) > 0) {
   species_counts <- species_flat %>%
-    count(fusarium_species, sort = TRUE)
+    count(fusarium_species, sort = TRUE) %>%
+    head(10)
 
-  cat("\nTop Fusarium Species:\n")
-  print(head(species_counts, 10))
-} else {
-  cat("\nNo species data extracted\n")
+  ggplot(species_counts, aes(x = reorder(fusarium_species, n), y = n)) +
+    geom_col(fill = "purple", alpha = 0.7) +
+    geom_text(aes(label = n), hjust = -0.2) +
+    coord_flip() +
+    labs(
+      title = "Top Fusarium Species Extracted",
+      x = "Species",
+      y = "Count"
+    ) +
+    theme_minimal()
+
+  species_counts %>% kable()
 }
 ```
 
-**Result**: Most common Fusarium species identified in extractions.
+## Crop Distribution
 
-## Summary
+```{r crop-distribution}
+crop_flat <- all_results %>%
+  select(id, crop) %>%
+  tidyr::unnest(crop) %>%
+  mutate(crop = tolower(crop))
 
-```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║       EXTRACTION DIAGNOSTICS COMPLETE              ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
+if (nrow(crop_flat) > 0) {
+  crop_counts <- crop_flat %>%
+    count(crop, sort = TRUE)
 
-cat("Diagnostic Summary:\n")
-cat("  Total extractions:", nrow(all_results), "\n")
-cat("  Empty extractions:", empty_count, "\n")
-cat("  Quality rate:", round((1 - empty_count/nrow(all_results)) * 100, 1), "%\n\n")
-
-cat("Next: Quality assessment in `0500_quality_assessment.Rmd`\n")
+  crop_counts %>% kable()
+}
 ```
 
-**Result**: Extraction diagnostics completed, quality issues identified.
+## Diagnostic Summary
+
+```{r summary}
+tibble(
+  Metric = c(
+    "Total extractions",
+    "Empty extractions",
+    "Quality rate",
+    "Unique species",
+    "Unique crops"
+  ),
+  Value = c(
+    nrow(all_results),
+    empty_count,
+    paste0(round((1 - empty_count/nrow(all_results)) * 100, 1), "%"),
+    ifelse(nrow(species_flat) > 0, n_distinct(species_flat$fusarium_species), 0),
+    ifelse(nrow(crop_flat) > 0, n_distinct(crop_flat$crop), 0)
+  )
+) %>% kable()
+```
 
 ## Next Steps
 
-1. ✓ Analyzed field completion
-2. ✓ Identified empty extractions
-3. ✓ Examined species distribution
-4. Next: Quality assessment in `0500_quality_assessment.Rmd`
+Proceed to `0500_quality_assessment.Rmd` for quality assessment.

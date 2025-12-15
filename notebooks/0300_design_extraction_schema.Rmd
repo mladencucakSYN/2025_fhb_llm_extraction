@@ -5,97 +5,79 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Designing the Extraction Schema
+## Overview
 
 This notebook defines the structured data schema for extracting Fusarium research information. The schema guides prompt engineering and determines what information will be extracted from each study.
+
+## Load Packages
 
 ```{r load-packages}
 library(dplyr)
 library(jsonlite)
-
-cat("✓ Packages loaded\n")
 ```
-
-**Result**: Ready for schema design.
 
 ## Define Extraction Fields
 
-Based on exploratory analysis (notebook 0120) and research goals, define extraction fields.
+Based on exploratory analysis (notebook 0120) and research goals.
 
 ```{r extraction-schema}
 extraction_schema <- list(
   fusarium_species = list(
     type = "array",
-    description = "List of Fusarium species mentioned (e.g., F. graminearum, F. culmorum)",
+    description = "List of Fusarium species mentioned",
     examples = c("Fusarium graminearum", "F. culmorum", "F. avenaceum")
   ),
-
   crop = list(
     type = "array",
     description = "Cereal crops studied",
     examples = c("wheat", "barley", "maize", "oats")
   ),
-
   abiotic_factors = list(
     type = "array",
     description = "Environmental/abiotic factors investigated",
     examples = c("temperature", "moisture", "humidity", "drought", "rainfall")
   ),
-
   mycotoxins = list(
     type = "array",
     description = "Mycotoxins studied or measured",
     examples = c("DON", "deoxynivalenol", "zearalenone", "nivalenol")
   ),
-
   observed_effects = list(
     type = "array",
     description = "Effects on crop or disease observed",
-    examples = c("yield loss", "disease severity", "toxin production", "infection rate")
+    examples = c("yield loss", "disease severity", "toxin production")
   ),
-
   agronomic_practices = list(
     type = "array",
     description = "Management or agronomic practices mentioned",
-    examples = c("fungicide application", "crop rotation", "resistant cultivars", "tillage")
+    examples = c("fungicide application", "crop rotation", "resistant cultivars")
   ),
-
   modeling = list(
     type = "boolean",
-    description = "Whether study involves predictive modeling or simulation",
-    examples = c("true", "false")
+    description = "Whether study involves predictive modeling or simulation"
   ),
-
   study_type = list(
     type = "array",
     description = "Type of study conducted",
     examples = c("field", "greenhouse", "laboratory", "modeling", "meta-analysis")
   ),
-
   summary = list(
     type = "string",
-    description = "Brief 1-2 sentence summary of main findings",
-    examples = "Temperature between 20-25°C optimized F. graminearum growth and DON production in wheat."
+    description = "Brief 1-2 sentence summary of main findings"
   )
 )
 
-cat("Extraction Schema Defined:\n")
-cat(rep("-", 60), "\n", sep = "")
-for (field_name in names(extraction_schema)) {
-  field <- extraction_schema[[field_name]]
-  cat(sprintf("\n%s (%s):\n", field_name, field$type))
-  cat("  ", field$description, "\n")
-  if (!is.null(field$examples)) {
-    cat("  Examples:", paste(head(field$examples, 2), collapse = ", "), "\n")
-  }
-}
+tibble(
+  Field = names(extraction_schema),
+  Type = sapply(extraction_schema, function(x) x$type),
+  Description = sapply(extraction_schema, function(x) x$description)
+) %>% kable()
 ```
 
-**Result**: Nine-field extraction schema designed based on dataset characteristics.
-
-## Create JSON Template
+## JSON Template
 
 Define the exact JSON structure that LLM should return.
 
@@ -112,56 +94,40 @@ json_template <- list(
   summary = ""
 )
 
-cat("\nJSON Template:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat(toJSON(json_template, pretty = TRUE, auto_unbox = TRUE))
-cat("\n")
+toJSON(json_template, pretty = TRUE, auto_unbox = TRUE)
 ```
-
-**Result**: JSON template provides clear output format for LLM.
 
 ## Save Schema Documentation
 
 ```{r save-schema}
 data_dir <- "../data/fusarium"
-schema_file <- file.path(data_dir, "extraction_schema.json")
 
 schema_doc <- list(
   version = "1.0",
-  date = Sys.Date(),
+  date = as.character(Sys.Date()),
   fields = extraction_schema,
   json_template = json_template
 )
 
+schema_file <- file.path(data_dir, "extraction_schema.json")
 write_json(schema_doc, schema_file, pretty = TRUE, auto_unbox = TRUE)
 
-cat("✓ Schema saved:", schema_file, "\n")
+tibble(
+  Output = "Extraction schema",
+  Path = schema_file,
+  Fields = length(extraction_schema)
+) %>% kable()
 ```
-
-**Result**: Extraction schema documented for reference.
 
 ## Summary
 
 ```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║        EXTRACTION SCHEMA DESIGNED                  ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Schema includes", length(extraction_schema), "fields:\n")
-for (field in names(extraction_schema)) {
-  cat("  ✓", field, "\n")
-}
-
-cat("\nNext: Develop extraction prompts (notebook 0310)\n")
+tibble(
+  Field = names(extraction_schema),
+  Type = sapply(extraction_schema, function(x) x$type)
+) %>% kable(caption = "Extraction Schema Fields")
 ```
-
-**Result**: Extraction schema ready for prompt engineering.
 
 ## Next Steps
 
-1. ✓ Defined 9 extraction fields
-2. ✓ Created JSON output template
-3. ✓ Documented schema
-4. Next: Develop prompts in `0310_develop_prompts.Rmd`
+Proceed to `0310_develop_prompts.Rmd` to develop extraction prompts.

@@ -51,3 +51,7 @@ dev/
 # API keys and secrets
 config/secrets.R
 api_keys.txt
+
+/.quarto/
+_site/
+_freeze/

@@ -1,15 +1,22 @@
 ---
 title: "Run Full Extraction"
 output: html_document
+execute:
+  eval: false
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, eval = FALSE)
+library(knitr)
 ```
 
-## Full-Scale Extraction
+## Overview
 
-This notebook runs the complete extraction pipeline on the full ecophysiology dataset. **Note: This notebook is configured to not run automatically (eval=FALSE) to prevent accidental large API usage.**
+This notebook runs the complete extraction pipeline on the full ecophysiology dataset.
+
+**Note: This notebook is configured to not run automatically (eval=FALSE) to prevent accidental large API usage.**
+
+## Load Packages
 
 ```{r load-all}
 library(dplyr)
@@ -23,70 +30,62 @@ data_dir <- "../data/fusarium"
 cache_dir <- "../data/cache"
 ```
 
-**Result**: Production extraction environment ready.
-
-## Load Full Dataset
+## Load Dataset
 
 ```{r load-dataset}
-# Load the ecophysiology subset
 ecophys_data <- readRDS(file.path(data_dir, "fusarium_ecophysiology_subset.rds"))
-
-cat("✓ Loaded", nrow(ecophys_data), "studies for extraction\n")
-
-# Check for already cached results
 cached <- load_cached_extractions(cache_dir)
-cat("  Already cached:", nrow(cached), "studies\n")
-
-# Get remaining documents
 remaining <- get_uncached_docs(ecophys_data, id_col = "id", cache_dir = cache_dir)
-cat("  Remaining:", nrow(remaining), "studies\n")
+
+tibble(
+  Dataset = c("Full ecophysiology", "Already cached", "Remaining"),
+  Studies = c(nrow(ecophys_data), nrow(cached), nrow(remaining))
+) %>% kable()
 ```
 
-**Result**: Full dataset loaded, progress assessed.
-
-## Configure Extraction Parameters
+## Configure Extraction
 
 ```{r configure-parameters}
-# Extraction configuration
 CONFIG <- list(
-  batch_size = 10,           # Documents per batch
-  delay_seconds = 60,        # Seconds between batches
-  max_attempts = 3,          # Retry attempts per document
-  checkpoint_every = 50      # Save checkpoint every N documents
+  batch_size = 10,
+  delay_seconds = 60,
+  max_attempts = 3,
+  checkpoint_every = 50
 )
 
-cat("Extraction Configuration:\n")
-cat("  Batch size:", CONFIG$batch_size, "documents\n")
-cat("  Delay:", CONFIG$delay_seconds, "seconds\n")
-cat("  Retry attempts:", CONFIG$max_attempts, "\n")
-cat("  Checkpoint frequency:", CONFIG$checkpoint_every, "documents\n\n")
+tibble(
+  Parameter = c("Batch size", "Delay between batches", "Retry attempts", "Checkpoint frequency"),
+  Value = c(
+    paste(CONFIG$batch_size, "documents"),
+    paste(CONFIG$delay_seconds, "seconds"),
+    CONFIG$max_attempts,
+    paste(CONFIG$checkpoint_every, "documents")
+  )
+) %>% kable()
+```
 
-# Estimate time
+## Time Estimate
+
+```{r time-estimate}
 est_batches <- ceiling(nrow(remaining) / CONFIG$batch_size)
 est_time_min <- (est_batches * CONFIG$delay_seconds) / 60
 
-cat("Estimated Processing Time:\n")
-cat("  Documents:", nrow(remaining), "\n")
-cat("  Batches:", est_batches, "\n")
-cat("  Estimated time:", round(est_time_min, 1), "minutes\n")
-cat("  (", round(est_time_min/60, 1), "hours )\n")
+tibble(
+  Metric = c("Documents to process", "Number of batches", "Estimated time"),
+  Value = c(
+    nrow(remaining),
+    est_batches,
+    paste(round(est_time_min, 1), "minutes (~", round(est_time_min/60, 1), "hours)")
+  )
+) %>% kable()
 ```
 
-**Result**: Extraction parameters configured for production run.
-
-## Run Full Extraction
+## Run Extraction
 
 ```{r run-extraction, eval=FALSE}
-# WARNING: This will make many API calls and take substantial time
-# Only run when you're ready for full extraction
+# WARNING: This will make many API calls
+# Only run when ready for full extraction
 
-cat("\n=== STARTING FULL EXTRACTION ===\n")
-cat("Press Ctrl+C to stop at any time\n")
-cat("Progress will be saved and can be resumed\n\n")
-
-Sys.sleep(5)  # Give time to cancel if started accidentally
-
-# Define extraction function
 extract_one_study <- function(study_row) {
   result <- retry_with_backoff({
     extract_fusarium_gemini(
@@ -98,7 +97,6 @@ extract_one_study <- function(study_row) {
 
   if (!is.null(result)) {
     result$id <- study_row$id
-    # Cache immediately
     cache_extraction(study_row$id, result, cache_dir)
     as.data.frame(result, stringsAsFactors = FALSE)
   } else {
@@ -106,7 +104,6 @@ extract_one_study <- function(study_row) {
   }
 }
 
-# Run batch processing
 results_df <- process_with_checkpoints(
   docs = remaining,
   extract_fn = extract_one_study,
@@ -116,79 +113,68 @@ results_df <- process_with_checkpoints(
   batch_size = CONFIG$batch_size,
   delay_seconds = CONFIG$delay_seconds
 )
-
-cat("\n✓ FULL EXTRACTION COMPLETE\n")
 ```
 
-**Result**: Full extraction run with checkpointing and caching.
-
-## Load and Combine All Results
+## Load Results
 
 ```{r load-results}
-# Load all cached extractions
 all_results <- load_cached_extractions(cache_dir)
 
-cat("\nFinal Results:\n")
-cat("  Total extractions:", nrow(all_results), "\n")
-cat("  Success rate:", nrow(all_results) / nrow(ecophys_data) * 100, "%\n")
+tibble(
+  Metric = c("Total extractions", "Success rate"),
+  Value = c(
+    nrow(all_results),
+    paste0(round(nrow(all_results) / nrow(ecophys_data) * 100, 1), "%")
+  )
+) %>% kable()
 
-# Save combined results
 final_file <- file.path(data_dir, "fusarium_extracted_full.rds")
 saveRDS(all_results, final_file)
-
-cat("\n✓ Results saved:", final_file, "\n")
 ```
-
-**Result**: All extraction results combined and saved.
 
 ## Extraction Summary
 
 ```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║       FULL EXTRACTION COMPLETE                     ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
 if (exists("all_results") && nrow(all_results) > 0) {
-  # Summary statistics
-  cat("Extraction Statistics:\n")
-  cat("  Total studies processed:", nrow(all_results), "\n")
-
-  # Count non-empty extractions
   n_with_species <- sum(sapply(all_results$fusarium_species, length) > 0)
   n_with_crop <- sum(sapply(all_results$crop, length) > 0)
   n_with_factors <- sum(sapply(all_results$abiotic_factors, length) > 0)
   n_modeling <- sum(all_results$modeling, na.rm = TRUE)
 
-  cat("  With Fusarium species:", n_with_species, "\n")
-  cat("  With crop info:", n_with_crop, "\n")
-  cat("  With abiotic factors:", n_with_factors, "\n")
-  cat("  Modeling studies:", n_modeling, "\n")
+  tibble(
+    Metric = c(
+      "Total processed",
+      "With Fusarium species",
+      "With crop info",
+      "With abiotic factors",
+      "Modeling studies"
+    ),
+    Count = c(
+      nrow(all_results),
+      n_with_species,
+      n_with_crop,
+      n_with_factors,
+      n_modeling
+    )
+  ) %>% kable()
 }
-
-cat("\nNext: Diagnostics in `0430_extraction_diagnostics.Rmd`\n")
 ```
 
-**Result**: Full extraction pipeline completed successfully.
+## Pre-run Checklist
+
+```{r checklist}
+tibble(
+  Check = c(
+    "API key valid",
+    "API quota available",
+    "Stable internet connection",
+    "Time available for processing",
+    "Monitoring plan"
+  ),
+  Status = c("[ ]", "[ ]", "[ ]", "[ ]", "[ ]")
+) %>% kable(caption = "Complete before running full extraction")
+```
 
 ## Next Steps
 
-1. Review extraction diagnostics (0430)
-2. Validate quality (0500)
-3. Analyze results (0530)
-
-## Important Notes
-
-**Before Running Full Extraction:**
-1. Verify API key is valid
-2. Check API quota/billing
-3. Ensure stable internet connection
-4. Plan for several hours of processing time
-5. Monitor for errors in first few batches
-
-**If Extraction Fails:**
-1. Check error logs
-2. Verify cached results: `load_cached_extractions()`
-3. Resume: Re-run this notebook (will skip cached documents)
-4. Adjust parameters if hitting rate limits
+Proceed to `0430_extraction_diagnostics.Rmd` for diagnostics analysis.

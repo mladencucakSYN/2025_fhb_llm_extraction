@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Implementing Caching
+## Overview
 
 This notebook implements caching to save extraction results and enable resuming from failures.
+
+## Load Packages
 
 ```{r load-all}
 library(dplyr)
@@ -22,16 +25,9 @@ data_dir <- "../data/fusarium"
 cache_dir <- "../data/cache"
 ```
 
-**Result**: Caching functions loaded.
-
 ## Test Cache Functions
 
-Demonstrate saving and loading cached extractions.
-
 ```{r test-cache}
-cat("=== Testing Cache Functions ===\n\n")
-
-# Create a test extraction result
 test_result <- list(
   id = "TEST_001",
   fusarium_species = c("F. graminearum"),
@@ -39,41 +35,34 @@ test_result <- list(
   summary = "Test extraction result"
 )
 
-# Save to cache
 cache_extraction("TEST_001", test_result, cache_dir)
-cat("✓ Test result cached\n\n")
 
-# Load from cache
 loaded_results <- load_cached_extractions(cache_dir)
-cat("✓ Loaded", nrow(loaded_results), "cached results\n")
-
-# Check cache stats
 stats <- cache_stats(cache_dir)
-cat("\nCache Statistics:\n")
-cat("  Files:", stats$n_files, "\n")
-cat("  Size:", stats$size_mb, "MB\n")
-```
 
-**Result**: Caching functions work correctly.
+tibble(
+  Metric = c("Cached files", "Cache size"),
+  Value = c(stats$n_files, paste(stats$size_mb, "MB"))
+) %>% kable()
+```
 
 ## Process with Caching
 
-Extract with automatic caching of results.
-
 ```{r process-with-cache}
 sample_10 <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
-
-cat("\n=== Processing with Caching ===\n\n")
+demo_size <- min(5, nrow(sample_10))
 
 results <- list()
+process_log <- tibble(
+  Study = integer(),
+  ID = character(),
+  Status = character()
+)
 
-for (i in 1:5) {
+for (i in seq_len(demo_size)) {
   study <- sample_10[i, ]
   doc_id <- study$id
 
-  cat(sprintf("[%d/5] Doc: %s ", i, doc_id))
-
-  # Extract
   result <- tryCatch({
     retry_with_backoff({
       extract_fusarium_gemini(
@@ -88,95 +77,72 @@ for (i in 1:5) {
 
   if (!is.null(result)) {
     result$id <- doc_id
-
-    # Cache the result
     cache_extraction(doc_id, result, cache_dir)
     results[[i]] <- result
-    cat("✓ Cached\n")
+    process_log <- bind_rows(process_log, tibble(
+      Study = i, ID = doc_id, Status = "Cached"
+    ))
   } else {
-    cat("✗ Failed\n")
+    process_log <- bind_rows(process_log, tibble(
+      Study = i, ID = doc_id, Status = "Failed"
+    ))
   }
 
   Sys.sleep(2)
 }
 
-cat("\n✓ Processing complete with caching\n")
+process_log %>% kable()
 ```
 
-**Result**: All successful extractions automatically cached.
+## Cache Status
 
-## Identify Uncached Documents
-
-Find which documents still need processing.
-
-```{r identify-uncached}
-# Get all documents
+```{r cache-status}
 all_docs <- sample_10
-
-# Identify uncached
 uncached <- get_uncached_docs(all_docs, id_col = "id", cache_dir = cache_dir)
 
-cat("\nUncached Documents:\n")
-cat("  Total documents:", nrow(all_docs), "\n")
-cat("  Uncached:", nrow(uncached), "\n")
-cat("  Cached:", nrow(all_docs) - nrow(uncached), "\n")
+tibble(
+  Metric = c("Total documents", "Cached", "Remaining"),
+  Count = c(
+    nrow(all_docs),
+    nrow(all_docs) - nrow(uncached),
+    nrow(uncached)
+  )
+) %>% kable()
 ```
 
-**Result**: Cache manager identifies which documents still need processing.
-
-## Demonstrate Resume Capability
-
-Show how caching enables resuming after interruption.
+## Resume Capability
 
 ```{r demonstrate-resume}
-cat("\n=== Resume Capability ===\n\n")
-
-cat("Scenario: Processing was interrupted after 5 documents\n\n")
-
-# Load all cached results
 cached_results <- load_cached_extractions(cache_dir)
-cat("Already processed:", nrow(cached_results), "documents\n")
-
-# Get remaining documents
 remaining <- get_uncached_docs(sample_10[1:10, ], id_col = "id", cache_dir = cache_dir)
-cat("Remaining to process:", nrow(remaining), "documents\n\n")
 
-cat("✓ Can resume processing from where we left off\n")
-cat("  This saves time and API costs\n")
+tibble(
+  Metric = c("Already processed", "Remaining to process"),
+  Count = c(nrow(cached_results), nrow(remaining))
+) %>% kable()
 ```
 
-**Result**: Caching enables efficient resumption after failures or interruptions.
+## Caching Benefits
 
-## Summary
-
-```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║         CACHING STRATEGY IMPLEMENTED               ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Caching Benefits:\n")
-cat("  ✓ Resume from failures\n")
-cat("  ✓ Avoid re-processing\n")
-cat("  ✓ Save API costs\n")
-cat("  ✓ Track progress\n")
-cat("  ✓ Incremental extraction\n\n")
-
-cat("Cache Functions:\n")
-cat("  - cache_extraction(): Save single result\n")
-cat("  - load_cached_extractions(): Load all cached\n")
-cat("  - get_uncached_docs(): Find remaining work\n")
-cat("  - cache_stats(): Monitor cache size\n\n")
-
-cat("Next: Full extraction in `0420_run_full_extraction.Rmd`\n")
+```{r benefits}
+tibble(
+  Benefit = c(
+    "Resume from failures",
+    "Avoid re-processing",
+    "Save API costs",
+    "Track progress",
+    "Incremental extraction"
+  ),
+  Description = c(
+    "Continue where interrupted",
+    "Skip already extracted documents",
+    "No duplicate API calls",
+    "Know what's done and what's left",
+    "Process in multiple sessions"
+  )
+) %>% kable()
 ```
-
-**Result**: Caching strategy ready for production use.
 
 ## Next Steps
 
-1. ✓ Tested cache functions
-2. ✓ Processed with automatic caching
-3. ✓ Demonstrated resume capability
-4. Next: Run full extraction in `0420_run_full_extraction.Rmd`
+Proceed to `0420_run_full_extraction.Rmd` for full-scale extraction.

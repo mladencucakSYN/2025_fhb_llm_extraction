@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Error Handling for Production Extraction
+## Overview
 
 This notebook implements comprehensive error handling for the Fusarium extraction pipeline, applying concepts from notebook 0030.
+
+## Load Packages and Data
 
 ```{r load-all}
 library(dplyr)
@@ -18,19 +21,17 @@ source("../R/gemini_extraction.R")
 source("../R/retry_logic.R")
 
 data_dir <- "../data/fusarium"
-```
+sample_10 <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
 
-**Result**: Error handling tools loaded.
+tibble(
+  Dataset = "Test sample",
+  Studies = nrow(sample_10)
+) %>% kable()
+```
 
 ## Test Extraction with Retry
 
-Combine extraction with retry logic from 0030.
-
 ```{r extraction-with-retry}
-sample_10 <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
-
-cat("Testing extraction with retry logic...\n\n")
-
 test_study <- sample_10[1, ]
 
 result <- retry_with_backoff({
@@ -41,12 +42,17 @@ result <- retry_with_backoff({
   )
 }, max_attempts = 3, base_delay = 2)
 
-cat("✓ Extraction with retry successful\n")
+tibble(
+  Field = c("ID", "Species extracted", "Crops extracted"),
+  Value = c(
+    test_study$id,
+    length(result$fusarium_species),
+    length(result$crop)
+  )
+) %>% kable()
 ```
 
-**Result**: Retry logic successfully wraps extraction function.
-
-## Wrapper Function for Safe Extraction
+## Safe Extraction Wrapper
 
 Create production-ready extraction wrapper with all error handling.
 
@@ -68,7 +74,6 @@ extract_fusarium_safe <- function(study, max_attempts = 3) {
     )
   })
 
-  # Add study ID to result
   if (is.null(result$error)) {
     result$id <- study$id
     result$error <- FALSE
@@ -76,107 +81,67 @@ extract_fusarium_safe <- function(study, max_attempts = 3) {
 
   result
 }
-
-cat("✓ Safe extraction wrapper created\n")
 ```
 
-**Result**: Production wrapper combines retry logic and error catching.
-
-## Test on Multiple Studies
-
-Test the safe wrapper on multiple studies.
+## Test Safe Wrapper
 
 ```{r test-safe-wrapper}
-cat("\nTesting safe wrapper on 5 studies...\n\n")
+test_results <- tibble(
+  Study = integer(),
+  Status = character(),
+  Error = character()
+)
 
-results <- list()
-
-for (i in 1:5) {
-  cat(sprintf("[%d/5] ", i))
-
+for (i in 1:min(5, nrow(sample_10))) {
   result <- extract_fusarium_safe(sample_10[i, ])
 
-  if (!result$error) {
-    cat("✓\n")
-    results[[i]] <- result
-  } else {
-    cat("✗ Error:", result$error_message, "\n")
-  }
+  test_results <- bind_rows(test_results, tibble(
+    Study = i,
+    Status = ifelse(result$error, "Failed", "Success"),
+    Error = ifelse(result$error, result$error_message, "")
+  ))
 
-  Sys.sleep(2)  # Rate limiting
+  Sys.sleep(2)
 }
 
-cat("\n✓ Processed 5 studies\n")
-cat("  Successful:", sum(sapply(results, function(r) !r$error)), "\n")
+test_results %>% kable()
 ```
 
-**Result**: Safe wrapper handles errors gracefully without stopping execution.
+## Error Handling Summary
 
-## Save Wrapper Function
-
-Save the production wrapper for use in batch processing.
-
-```{r save-wrapper}
-# Add function to gemini_extraction.R conceptually
-cat("\nProduction Extraction Wrapper:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat('
-extract_fusarium_safe <- function(study, max_attempts = 3) {
-  result <- tryCatch({
-    retry_with_backoff({
-      extract_fusarium_gemini(
-        abstract = study$abstract_clean,
-        title = study$title,
-        keywords = study$keywords_clean
-      )
-    }, max_attempts = max_attempts, base_delay = 2)
-  }, error = function(e) {
-    list(
-      error = TRUE,
-      error_message = conditionMessage(e),
-      id = study$id
-    )
-  })
-
-  if (is.null(result$error)) {
-    result$id <- study$id
-    result$error <- FALSE
-  }
-
-  result
-}
-')
-
-cat("\n✓ Wrapper ready for production use\n")
+```{r error-summary}
+tibble(
+  Metric = c("Studies processed", "Successful", "Failed", "Success rate"),
+  Value = c(
+    nrow(test_results),
+    sum(test_results$Status == "Success"),
+    sum(test_results$Status == "Failed"),
+    paste0(round(mean(test_results$Status == "Success") * 100), "%")
+  )
+) %>% kable()
 ```
 
-**Result**: Production-ready extraction function with comprehensive error handling.
+## Error Handling Features
 
-## Summary
-
-```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║       ERROR HANDLING IMPLEMENTED                   ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Error Handling Features:\n")
-cat("  ✓ Exponential backoff retry (from 0030)\n")
-cat("  ✓ Graceful error catching\n")
-cat("  ✓ Error message logging\n")
-cat("  ✓ Continues on failure\n")
-cat("  ✓ Rate limiting built-in\n\n")
-
-cat("Ready for batch processing (Section 4)\n")
-cat("Next: Batch processing in `0400_batch_processing.Rmd`\n")
+```{r features}
+tibble(
+  Feature = c(
+    "Exponential backoff retry",
+    "Graceful error catching",
+    "Error message logging",
+    "Continues on failure",
+    "Rate limiting built-in"
+  ),
+  Description = c(
+    "Retries failed requests with increasing delays",
+    "Catches errors without stopping execution",
+    "Records error messages for debugging",
+    "Processes remaining studies after failure",
+    "Adds delay between API calls"
+  )
+) %>% kable()
 ```
-
-**Result**: Robust error handling ready for production-scale extraction.
 
 ## Next Steps
 
-1. ✓ Implemented retry logic for extraction
-2. ✓ Created safe extraction wrapper
-3. ✓ Tested on multiple studies
-4. Next: Batch processing in `0400_batch_processing.Rmd`
+Proceed to `0400_batch_processing.Rmd` for batch processing implementation.

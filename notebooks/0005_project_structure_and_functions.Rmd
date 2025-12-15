@@ -5,481 +5,217 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+library(knitr)
 ```
 
 ## Understanding Project Organization
 
-This notebook explains the project structure and how to work with reusable functions. Understanding this organization helps you write maintainable, reproducible research code.
-
-### Purpose
-
-Learn how to:
-- Navigate the project directory structure
-- Create and organize reusable functions
-- Load project functions in notebooks
-- Follow the development workflow from testing to production
+This notebook explains the project structure and how to work with reusable functions.
 
 ## Project Directory Structure
 
-Overview of the project organization and purpose of each directory.
-
 ```{r show-structure}
-cat("Project Directory Structure:\n")
-cat(rep("=", 60), "\n", sep = "")
-cat("
-2025_fhb_llm_extraction/
-├── R/                          # Reusable R functions (PRODUCTION)
-│   ├── utils.R                 # Utility functions (config, file I/O)
-│   ├── retry_logic.R           # Error handling and retry logic
-│   ├── batch_processor.R       # Batch processing for large datasets
-│   ├── cache_manager.R         # Cache extraction results
-│   ├── gemini_extraction.R     # Gemini API extraction functions
-│   ├── extractors.R            # LLM extraction wrappers
-│   └── evaluation.R            # Evaluation metrics and plots
-│
-├── notebooks/                  # R Markdown analysis notebooks
-│   ├── 0000_setup_environment.Rmd
-│   ├── 0005_project_structure_and_functions.Rmd (this file)
-│   ├── 0010_test_gemini_api.Rmd
-│   └── ...                     # Additional numbered notebooks
-│
-├── dev/                        # Development and testing (NOT tracked in git)
-│   ├── implementation_plan.md  # Project planning docs
-│   ├── test_functions.R        # Experimental code
-│   └── archive/                # Old versions
-│
-├── data/                       # Data files
-│   ├── fusarium/               # Research dataset
-│   ├── cache/                  # Cached extraction results
-│   └── logs/                   # Processing logs
-│
-├── results/                    # Output files, reports
-│
-├── tests/                      # Unit tests (testthat)
-│
-├── config/                     # Configuration files
-│
-├── .env                        # Environment variables (API keys)
-├── renv.lock                   # Package dependencies
-└── README.md                   # Project documentation
-")
-cat(rep("=", 60), "\n", sep = "")
+tibble::tibble(
+  Directory = c("R/", "notebooks/", "dev/", "data/", "results/", "tests/"),
+  Purpose = c(
+    "Production functions (reusable, tested, documented)",
+    "R Markdown analysis notebooks",
+    "Development and testing (not tracked in git)",
+    "Data files, cache, logs",
+    "Output files and reports",
+    "Unit tests (testthat)"
+  )
+) %>% kable()
 ```
 
-**Result**: Project structure organized by code maturity and purpose.
-
-## Why Separate `R/` from `dev/`?
-
-The distinction between production code (`R/`) and development code (`dev/`).
+## R/ vs dev/ Directory Distinction
 
 ```{r explain-separation}
-cat("\nCode Organization Philosophy:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("\n")
-
-cat("R/ Directory (PRODUCTION CODE):\n")
-cat("  Purpose:  Stable, tested, reusable functions\n")
-cat("  Quality:  Documented, error-handled, reliable\n")
-cat("  Used by:  All notebooks, other researchers\n")
-cat("  Tracked:  YES - committed to git\n")
-cat("  Examples:\n")
-cat("    - retry_with_backoff() - used in every extraction\n")
-cat("    - extract_fusarium_gemini() - core extraction logic\n")
-cat("    - cache_extraction() - used across multiple notebooks\n\n")
-
-cat("dev/ Directory (DEVELOPMENT/TESTING):\n")
-cat("  Purpose:  Experimental code, quick tests, scratch work\n")
-cat("  Quality:  May be incomplete, untested\n")
-cat("  Used by:  Only during development\n")
-cat("  Tracked:  NO - in .gitignore (except .md files)\n")
-cat("  Examples:\n")
-cat("    - test_new_prompt.R - testing different prompts\n")
-cat("    - debug_rate_limits.R - debugging specific issues\n")
-cat("    - explore_lda_params.R - parameter tuning\n\n")
-
-cat("Workflow:\n")
-cat("  1. Write experimental code in dev/\n")
-cat("  2. Test and refine in notebooks\n")
-cat("  3. When code is used 3+ times → move to R/\n")
-cat("  4. Add documentation and error handling\n")
-cat("  5. Source from R/ in all notebooks\n")
-
-cat(rep("-", 60), "\n", sep = "")
+tibble::tibble(
+  Aspect = c("Purpose", "Quality", "Used by", "Git tracked", "Examples"),
+  `R/ Directory` = c(
+    "Stable, tested, reusable functions",
+    "Documented, error-handled, reliable",
+    "All notebooks, other researchers",
+    "Yes",
+    "retry_with_backoff(), extract_fusarium_gemini()"
+  ),
+  `dev/ Directory` = c(
+    "Experimental code, quick tests",
+    "May be incomplete, untested",
+    "Only during development",
+    "No (except .md files)",
+    "test_new_prompt.R, debug_rate_limits.R"
+  )
+) %>% kable()
 ```
-
-**Result**: Clear distinction between production and development code ensures maintainability.
-
-## How to Load Project Functions
-
-Demonstration of loading functions from the `R/` directory.
-
-```{r load-functions-demo}
-cat("\nLoading Project Functions:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("\n")
-
-cat("Method 1: Source Individual Files\n")
-cat("----------------------------------\n")
-cat('source("../R/utils.R")\n')
-cat('source("../R/gemini_extraction.R")\n\n')
-
-cat("Method 2: Source All R Functions\n")
-cat("----------------------------------\n")
-cat('r_files <- list.files("../R", pattern = "\\\\.R$", full.names = TRUE)\n')
-cat("invisible(lapply(r_files, source))\n\n")
-
-cat("Method 3: Selective Loading (Recommended)\n")
-cat("----------------------------------\n")
-cat("# Only load what you need for clarity\n")
-cat('source("../R/utils.R")          # Always needed\n')
-cat('source("../R/gemini_extraction.R")  # For extraction notebooks\n')
-cat('source("../R/retry_logic.R")    # When handling errors\n\n')
-
-# Demonstrate actual loading
-cat("Loading project functions now...\n")
-source("../R/utils.R")
-source("../R/gemini_extraction.R")
-source("../R/retry_logic.R")
-
-cat("\n✓ Functions loaded successfully\n")
-```
-
-**Result**: Multiple methods available for loading functions depending on notebook needs.
-
-## Inspect Loaded Functions
-
-Examine which functions are now available.
-
-```{r inspect-functions}
-cat("\nInspecting Loaded Functions:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("\n")
-
-cat("From utils.R:\n")
-cat("  - load_config()       Load API keys from .env\n")
-cat("  - clean_text()        Clean and normalize text\n")
-cat("  - save_results()      Save extraction results\n\n")
-
-cat("From gemini_extraction.R:\n")
-cat("  - simple_gemini()              Basic Gemini chat\n")
-cat("  - extract_fusarium_gemini()    Fusarium-specific extraction\n")
-cat("  - extract_generic_gemini()     Generic extraction\n")
-cat("  - extract_fusarium_with_retry() Extraction with retry logic\n\n")
-
-cat("From retry_logic.R:\n")
-cat("  - retry_with_backoff()  Exponential backoff retry\n")
-cat("  - retry_api_call()      API-specific retry wrapper\n")
-cat("  - safe_extract()        Error-handling wrapper\n\n")
-
-# Show function signatures
-cat("Function Details:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("\nsimple_gemini function:\n")
-print(args(simple_gemini))
-
-cat("\nretry_with_backoff function:\n")
-print(args(retry_with_backoff))
-
-cat("\nextract_fusarium_gemini function:\n")
-print(args(extract_fusarium_gemini))
-```
-
-**Result**: Available functions documented with their signatures.
-
-## Using Project Functions in Notebooks
-
-Practical examples of using loaded functions.
-
-```{r use-functions}
-cat("\nUsing Project Functions - Examples:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("\n")
-
-cat("Example 1: Load Configuration\n")
-cat("------------------------------\n")
-config <- load_config()
-cat("✓ API keys loaded\n")
-cat("  OpenAI key set:", nchar(config$openai_api_key) > 0, "\n")
-cat("  Anthropic key set:", nchar(config$anthropic_api_key) > 0, "\n\n")
-
-cat("Example 2: Clean Text\n")
-cat("------------------------------\n")
-messy_text <- "  This  has\n\nmultiple\t\tspaces  "
-clean <- clean_text(messy_text)
-cat("Before:", shQuote(messy_text), "\n")
-cat("After: ", shQuote(clean), "\n\n")
-
-cat("Example 3: Retry Logic\n")
-cat("------------------------------\n")
-cat("This would retry on failure:\n")
-cat('result <- retry_with_backoff({\n')
-cat('  simple_gemini("Test question")\n')
-cat('}, max_attempts = 3)\n\n')
-
-cat("Example 4: Extract with Retry\n")
-cat("------------------------------\n")
-cat("Fusarium extraction with automatic retry:\n")
-cat('result <- extract_fusarium_with_retry(\n')
-cat('  abstract = "Study text here...",\n')
-cat('  title = "Paper title",\n')
-cat('  keywords = "fusarium, wheat"\n')
-cat(')\n')
-```
-
-**Result**: Common function usage patterns demonstrated.
-
-## Function Documentation Standards
-
-How to document functions in the `R/` directory.
-
-```{r documentation-standards}
-cat("\nFunction Documentation Standards:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("\n")
-
-cat("Required Documentation:\n\n")
-
-cat("1. roxygen2 Header (for R packages):\n")
-cat("   #' Function Title\n")
-cat("   #' \n")
-cat("   #' Detailed description of what the function does\n")
-cat("   #' \n")
-cat("   #' @param param_name Description of parameter\n")
-cat("   #' @return Description of return value\n")
-cat("   #' @export\n")
-cat("   #' @examples\n")
-cat("   #' \\dontrun{\n")
-cat("   #'   result <- my_function(param = value)\n")
-cat("   #' }\n\n")
-
-cat("2. Function Implementation:\n")
-cat("   - Clear parameter names\n")
-cat("   - Input validation\n")
-cat("   - Error handling (tryCatch)\n")
-cat("   - Informative error messages\n\n")
-
-cat("3. Example from gemini_extraction.R:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("
-#' Extract Fusarium Study Information
-#'
-#' Extracts structured information about Fusarium species on cereal crops
-#' from scientific abstracts using Gemini.
-#'
-#' @param abstract Character string with the abstract text
-#' @param title Character string with the paper title (optional)
-#' @param keywords Character string with keywords (optional)
-#' @param model Gemini model to use (default: 'gemini-2.0-flash-exp')
-#' @param api_key Google API key (defaults to GOOGLE_API_KEY env var)
-#' @return List with extracted information
-#' @export
-extract_fusarium_gemini <- function(abstract,
-                                    title = '',
-                                    keywords = '',
-                                    model = 'gemini-2.0-flash-exp',
-                                    api_key = Sys.getenv('GOOGLE_API_KEY')) {
-  # Function implementation...
-}
-")
-```
-
-**Result**: Documentation standards ensure functions are self-explanatory.
 
 ## Development Workflow
 
-Step-by-step process for developing new functions.
-
-```{r development-workflow}
-cat("\nDevelopment Workflow:\n")
-cat(rep("=", 60), "\n", sep = "")
-cat("\n")
-
-cat("Stage 1: EXPERIMENTATION (dev/)\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("File: dev/test_new_extraction_prompt.R\n")
-cat("\n# Quick test of new prompt idea\n")
-cat("test_prompt <- 'Extract species names...'\n")
-cat("result <- simple_gemini(test_prompt)\n")
-cat("print(result)\n\n")
-
-cat("Stage 2: NOTEBOOK INTEGRATION\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("File: notebooks/0310_develop_prompts.Rmd\n")
-cat("\n```{r test-prompt}\n")
-cat("# Test prompt on multiple examples\n")
-cat("test_texts <- c(...)\n")
-cat("results <- lapply(test_texts, function(text) {\n")
-cat("  extract_with_new_prompt(text)\n")
-cat("})\n")
-cat("```\n\n")
-
-cat("Stage 3: REFINEMENT (still in notebook)\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("- Test on 10-20 examples\n")
-cat("- Handle edge cases\n")
-cat("- Add error checking\n")
-cat("- Refine prompt wording\n\n")
-
-cat("Stage 4: PROMOTION TO R/\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("When function is:\n")
-cat("  ✓ Used in 3+ notebooks\n")
-cat("  ✓ Tested and working\n")
-cat("  ✓ Handles errors gracefully\n")
-cat("  ✓ Has clear parameters\n\n")
-cat("Actions:\n")
-cat("  1. Create/update file in R/ directory\n")
-cat("  2. Add roxygen2 documentation\n")
-cat("  3. Add examples in comments\n")
-cat("  4. Replace inline code in notebooks with source() calls\n\n")
-
-cat("Stage 5: MAINTENANCE\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("- Keep functions focused (single responsibility)\n")
-cat("- Update documentation when changing behavior\n")
-cat("- Add unit tests in tests/ directory\n")
-cat("- Version control with git commits\n")
+```{r workflow}
+tibble::tibble(
+  Stage = 1:5,
+  Phase = c(
+    "Experimentation", "Notebook Integration",
+    "Refinement", "Promotion to R/", "Maintenance"
+  ),
+  Description = c(
+    "Write experimental code in dev/",
+    "Test in notebooks with multiple examples",
+    "Handle edge cases, add error checking",
+    "Move to R/ when used 3+ times",
+    "Update documentation, add tests"
+  )
+) %>% kable()
 ```
 
-**Result**: Clear pathway from experimentation to production code.
+## Loading Functions
 
-## Sourcing Functions: Best Practices
-
-Guidelines for loading functions in notebooks.
-
-```{r sourcing-best-practices}
-cat("\nBest Practices for Loading Functions:\n")
-cat(rep("=", 60), "\n", sep = "")
-cat("\n")
-
-cat("✓ DO:\n")
-cat("  - Load at the beginning of notebook (in load-packages chunk)\n")
-cat("  - Use relative paths: '../R/filename.R'\n")
-cat("  - Source only what you need\n")
-cat("  - Check if functions exist: exists('function_name')\n")
-cat("  - Handle source errors with tryCatch\n\n")
-
-cat("✗ DON'T:\n")
-cat("  - Source in the middle of analysis\n")
-cat("  - Use absolute paths\n")
-cat("  - Source the same file multiple times\n")
-cat("  - Mix function definitions with sourcing\n")
-cat("  - Leave untested code in R/ directory\n\n")
-
-cat("Template for Notebook Setup:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("
-```{r load-packages, message=FALSE, warning=FALSE}
-# Load required packages
-library(dplyr)
-library(ggplot2)
+```{r load-functions-demo}
+tibble::tibble(
+  Method = c("Individual files", "All R functions", "Selective (recommended)"),
+  Code = c(
+    'source("../R/utils.R")',
+    'lapply(list.files("../R", "\\\\.R$", full.names=TRUE), source)',
+    'source("../R/utils.R"); source("../R/gemini_extraction.R")'
+  ),
+  `Use Case` = c(
+    "Single specific module",
+    "Need all project functions",
+    "Load only what notebook needs"
+  )
+) %>% kable()
 
 # Load project functions
-source('../R/utils.R')
-source('../R/gemini_extraction.R')
-source('../R/retry_logic.R')
-
-cat('✓ Packages and functions loaded\\n')
-```
-")
+source("../R/utils.R")
+source("../R/gemini_extraction.R")
+source("../R/retry_logic.R")
 ```
 
-**Result**: Consistent loading pattern ensures reproducibility across notebooks.
+## Available Functions
 
-## Check Function Availability
+```{r inspect-functions}
+tibble::tibble(
+  Source = c(rep("utils.R", 3), rep("gemini_extraction.R", 4), rep("retry_logic.R", 3)),
+  Function = c(
+    "load_config()", "clean_text()", "save_results()",
+    "simple_gemini()", "extract_fusarium_gemini()",
+    "extract_generic_gemini()", "extract_fusarium_with_retry()",
+    "retry_with_backoff()", "retry_api_call()", "safe_extract()"
+  ),
+  Description = c(
+    "Load API keys from .env",
+    "Clean and normalize text",
+    "Save extraction results",
+    "Basic Gemini chat",
+    "Fusarium-specific extraction",
+    "Generic extraction",
+    "Extraction with retry logic",
+    "Exponential backoff retry",
+    "API-specific retry wrapper",
+    "Error-handling wrapper"
+  )
+) %>% kable()
+```
 
-Verify that expected functions are loaded.
+## Function Usage Examples
+
+```{r use-functions}
+# Example 1: Load configuration
+config <- load_config()
+
+tibble::tibble(
+  `API Key` = c("OpenAI", "Anthropic"),
+  Configured = c(
+    nchar(config$openai_api_key) > 0,
+    nchar(config$anthropic_api_key) > 0
+  )
+) %>% kable()
+
+# Example 2: Clean text
+messy_text <- "  This  has\n\nmultiple\t\tspaces  "
+clean <- clean_text(messy_text)
+
+tibble::tibble(
+  Stage = c("Before", "After"),
+  Text = c(messy_text, clean)
+) %>% kable()
+```
+
+## Documentation Standards
+
+```{r documentation-standards}
+tibble::tibble(
+  Element = c(
+    "roxygen2 header", "Clear parameter names",
+    "Input validation", "Error handling", "Examples"
+  ),
+  Description = c(
+    "#' @param, #' @return, #' @export annotations",
+    "Descriptive, self-documenting names",
+    "Check types and ranges",
+    "tryCatch with informative messages",
+    "Working examples in comments"
+  )
+) %>% kable()
+```
+
+## Function Availability Check
 
 ```{r check-availability}
-cat("\nFunction Availability Check:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("\n")
-
-# List of expected functions
 expected_functions <- c(
-  "load_config",
-  "clean_text",
-  "simple_gemini",
-  "extract_fusarium_gemini",
-  "retry_with_backoff",
-  "safe_extract"
+  "load_config", "clean_text", "simple_gemini",
+  "extract_fusarium_gemini", "retry_with_backoff", "safe_extract"
 )
 
-cat("Checking for expected functions:\n\n")
-for (func in expected_functions) {
-  available <- exists(func, mode = "function")
-  status <- if (available) "✓" else "✗"
-  cat(sprintf("  %s %s\n", status, func))
-}
-
-all_available <- all(sapply(expected_functions, exists, mode = "function"))
-
-if (all_available) {
-  cat("\n✓ All expected functions are available\n")
-} else {
-  cat("\n⚠ Some functions are missing - check source() calls\n")
-}
+tibble::tibble(
+  Function = expected_functions,
+  Available = sapply(expected_functions, exists, mode = "function")
+) %>% kable()
 ```
 
-**Result**: Function availability verified before proceeding with analysis.
+## Best Practices
+
+```{r best-practices}
+tibble::tibble(
+  Category = c(rep("Do", 5), rep("Don't", 5)),
+  Practice = c(
+    "Load at beginning of notebook",
+    "Use relative paths: '../R/filename.R'",
+    "Source only what you need",
+    "Check if functions exist",
+    "Handle source errors with tryCatch",
+    "Source in middle of analysis",
+    "Use absolute paths",
+    "Source same file multiple times",
+    "Mix function definitions with sourcing",
+    "Leave untested code in R/"
+  )
+) %>% kable()
+```
 
 ## Summary
 
-Key concepts about project organization and function loading.
-
 ```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║     PROJECT STRUCTURE SUMMARY                      ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Directory Purpose:\n")
-cat(rep("-", 60), "\n", sep = "")
-cat("  R/           → Production functions (reusable, tested)\n")
-cat("  notebooks/   → Analysis and documentation\n")
-cat("  dev/         → Development and testing (not tracked)\n")
-cat("  data/        → Input data and cache\n")
-cat("  results/     → Output files\n")
-cat(rep("-", 60), "\n\n", sep = "")
-
-cat("Development Workflow:\n")
-cat("  1. Experiment in dev/ or notebook\n")
-cat("  2. Test and refine\n")
-cat("  3. Used 3+ times? → Move to R/\n")
-cat("  4. Add documentation\n")
-cat("  5. Source in notebooks\n\n")
-
-cat("Loading Functions:\n")
-cat("  - Use source('../R/filename.R')\n")
-cat("  - Load at start of notebook\n")
-cat("  - Only load what you need\n")
-cat("  - Verify with exists()\n")
+tibble::tibble(
+  Topic = c(
+    "Directory structure",
+    "Development workflow",
+    "Loading functions",
+    "Documentation"
+  ),
+  `Key Point` = c(
+    "R/ for production, dev/ for experiments",
+    "Experiment -> Test -> Refine -> Promote -> Maintain",
+    "source('../R/filename.R') at notebook start",
+    "roxygen2 headers, clear params, error handling"
+  )
+) %>% kable()
 ```
-
-**Result**: Project organization principles established for collaborative research.
 
 ## Next Steps
 
-1. ✓ Understand project structure
-2. ✓ Know how to load functions
-3. ✓ Understand development workflow
-4. Next: Continue with API testing in `0010_test_gemini_api.Rmd`
-5. Future: Move your refined extraction functions to `R/` as they mature
-
-## Note for Students
-
-As you develop your extraction pipeline:
-
-1. **Start Simple**: Write code directly in notebooks first
-2. **Identify Patterns**: Notice when you copy-paste code between notebooks
-3. **Extract Functions**: Move repeated code to `R/` directory
-4. **Document**: Add clear comments and parameter descriptions
-5. **Test**: Verify functions work across different inputs
-6. **Share**: Other researchers can now use your functions
-
-This structure helps your research be:
-- **Reproducible**: Anyone can source your functions
-- **Maintainable**: Functions are in one place, not scattered
-- **Collaborative**: Others can contribute and improve functions
-- **Professional**: Follows R package development standards
+1. Understand project structure
+2. Know how to load functions
+3. Understand development workflow
+4. Continue with API testing in `0010_test_gemini_api.Rmd`

@@ -1,6 +1,8 @@
 ---
 title: "Working with Lists and API Responses"
 output: html_document
+execute:
+  eval: false
 ---
 
 ```{r setup, include=FALSE}
