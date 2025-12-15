@@ -1,0 +1,134 @@
+---
+title: "LLM-Based Text Extraction for Fusarium Research"
+---
+
+## Overview
+
+This project demonstrates LLM-assisted extraction of structured information from scientific literature, specifically focused on Fusarium head blight (FHB) research under climate change conditions.
+
+The workflow combines:
+
+- **Educational progression**: Simple examples building to complex research applications
+- **Production-ready code**: Error handling, retry logic, batch processing, caching
+- **Complete pipeline**: Data loading → Topic modeling → LLM extraction → Analysis
+
+## Notebook Workflow
+
+The notebooks are designed to run sequentially through six phases:
+
+### Section 0: Setup & Education
+
+Learn basic concepts with toy examples before tackling real research data.
+
+| Notebook | Purpose |
+|----------|---------|
+| [0000](notebooks/0000_setup_environment.Rmd) | Verify R environment and packages |
+| [0005](notebooks/0005_project_structure_and_functions.Rmd) | Project structure and function loading |
+| [0010](notebooks/0010_test_gemini_api.Rmd) | Test Gemini API connectivity |
+| [0020](notebooks/0020_toy_example_extraction.Rmd) | Rule-based vs. LLM extraction comparison |
+| [0030](notebooks/0030_error_handling_basics.Rmd) | Retry logic for rate limits |
+
+### Data Fetching (Optional)
+
+Programmatically fetch scientific literature from databases.
+
+| Notebook | Purpose |
+|----------|---------|
+| [0090](notebooks/0090_fetch_pubmed_data.Rmd) | Fetch from PubMed (NCBI E-utilities) |
+| [0092](notebooks/0092_working_with_lists.Rmd) | Working with lists and API responses |
+| [0095](notebooks/0095_fetch_scopus_data.Rmd) | Fetch from Scopus (Elsevier API) |
+| [0097](notebooks/0097_fetch_openalex_data.Rmd) | Fetch from OpenAlex (open API, no key required) |
+
+### Section 1: Data Loading
+
+Load and prepare the Fusarium literature dataset.
+
+| Notebook | Purpose |
+|----------|---------|
+| [0100](notebooks/0100_load_fusarium_data.Rmd) | Load literature data |
+| [0110](notebooks/0110_preprocess_abstracts.Rmd) | Clean and preprocess abstracts |
+| [0120](notebooks/0120_exploratory_analysis.Rmd) | Exploratory analysis |
+
+### Section 2: Topic Modeling
+
+Use LDA to identify research themes and filter relevant studies.
+
+| Notebook | Purpose |
+|----------|---------|
+| [0200](notebooks/0200_lda_first_pass.Rmd) | Run 20-topic LDA on full corpus |
+| [0210](notebooks/0210_topic_interpretation.Rmd) | Label and group topics |
+| [0220](notebooks/0220_subset_ecophysiology.Rmd) | Filter to ecophysiology subset |
+| [0230](notebooks/0230_create_test_sample.Rmd) | Create test samples |
+
+### Section 3: Extraction Development
+
+Design and test extraction schema and prompts.
+
+| Notebook | Purpose |
+|----------|---------|
+| [0300](notebooks/0300_design_extraction_schema.Rmd) | Define 9-field extraction schema |
+| [0310](notebooks/0310_develop_prompts.Rmd) | Engineer Fusarium-specific prompts |
+| [0320](notebooks/0320_single_extraction_test.Rmd) | Test on single document |
+| [0330](notebooks/0330_handle_errors.Rmd) | Comprehensive error handling |
+
+### Section 4: Production Processing
+
+Run full-scale extraction with caching and checkpointing.
+
+| Notebook | Purpose |
+|----------|---------|
+| [0400](notebooks/0400_batch_processing.Rmd) | Batch process with rate limiting |
+| [0410](notebooks/0410_caching_strategy.Rmd) | Implement result caching |
+| [0420](notebooks/0420_run_full_extraction.Rmd) | Extract from full dataset |
+| [0430](notebooks/0430_extraction_diagnostics.Rmd) | Analyze extraction diagnostics |
+
+### Section 5: Validation & Analysis
+
+Assess quality and perform research analysis.
+
+| Notebook | Purpose |
+|----------|---------|
+| [0500](notebooks/0500_quality_assessment.Rmd) | Quality assessment framework |
+| [0510](notebooks/0510_manual_validation.Rmd) | Manual validation of sample |
+| [0520](notebooks/0520_aggregate_results.Rmd) | Aggregate all results |
+| [0530](notebooks/0530_fusarium_analysis.Rmd) | Final research analysis |
+
+## Extraction Schema
+
+The project extracts 9 fields from each study:
+
+1. **fusarium_species**: F. graminearum, F. culmorum, etc.
+2. **crop**: wheat, barley, maize, oats
+3. **abiotic_factors**: temperature, moisture, humidity, drought
+4. **mycotoxins**: DON, zearalenone, nivalenol
+5. **observed_effects**: yield loss, disease severity, toxin production
+6. **agronomic_practices**: fungicide, rotation, resistant cultivars
+7. **modeling**: whether study uses predictive models
+8. **study_type**: field, greenhouse, laboratory, modeling
+9. **summary**: 1-2 sentence finding summary
+
+## Quick Start
+
+```r
+# 1. Clone and restore packages
+git clone <repo-url>
+cd 2025_fhb_llm_extraction
+renv::restore()
+
+# 2. Set up API keys in .env
+GOOGLE_API_KEY=your_key
+
+# 3. Run setup notebook
+# Open notebooks/0000_setup_environment.Rmd
+```
+
+## Project Structure
+
+```
+2025_fhb_llm_extraction/
+├── R/                    # Production R functions
+├── notebooks/            # Numbered analysis notebooks
+├── data/                 # Data files
+├── docs/                 # Documentation
+└── _quarto.yml           # This site configuration
+```

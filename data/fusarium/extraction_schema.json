@@ -1,0 +1,60 @@
+{
+  "version": "1.0",
+  "date": "2025-12-15",
+  "fields": {
+    "fusarium_species": {
+      "type": "array",
+      "description": "List of Fusarium species mentioned",
+      "examples": ["Fusarium graminearum", "F. culmorum", "F. avenaceum"]
+    },
+    "crop": {
+      "type": "array",
+      "description": "Cereal crops studied",
+      "examples": ["wheat", "barley", "maize", "oats"]
+    },
+    "abiotic_factors": {
+      "type": "array",
+      "description": "Environmental/abiotic factors investigated",
+      "examples": ["temperature", "moisture", "humidity", "drought", "rainfall"]
+    },
+    "mycotoxins": {
+      "type": "array",
+      "description": "Mycotoxins studied or measured",
+      "examples": ["DON", "deoxynivalenol", "zearalenone", "nivalenol"]
+    },
+    "observed_effects": {
+      "type": "array",
+      "description": "Effects on crop or disease observed",
+      "examples": ["yield loss", "disease severity", "toxin production"]
+    },
+    "agronomic_practices": {
+      "type": "array",
+      "description": "Management or agronomic practices mentioned",
+      "examples": ["fungicide application", "crop rotation", "resistant cultivars"]
+    },
+    "modeling": {
+      "type": "boolean",
+      "description": "Whether study involves predictive modeling or simulation"
+    },
+    "study_type": {
+      "type": "array",
+      "description": "Type of study conducted",
+      "examples": ["field", "greenhouse", "laboratory", "modeling", "meta-analysis"]
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief 1-2 sentence summary of main findings"
+    }
+  },
+  "json_template": {
+    "fusarium_species": [],
+    "crop": [],
+    "abiotic_factors": [],
+    "mycotoxins": [],
+    "observed_effects": [],
+    "agronomic_practices": [],
+    "modeling": false,
+    "study_type": [],
+    "summary": ""
+  }
+}

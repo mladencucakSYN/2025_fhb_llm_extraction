@@ -1,0 +1,232 @@
+---
+title: "Fetch Data from OpenAlex"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
+```
+
+## Overview
+
+OpenAlex is a free, open catalog of the global research system. It provides an alternative to commercial databases like Scopus for fetching scholarly metadata including abstracts.
+
+**Key advantages:**
+- Free API, no authentication required
+- Good coverage of scholarly literature
+- Returns abstracts (as inverted indices)
+- Includes citation counts, open access status
+
+**Related functions:** `R/openalex_api.R`, `R/pubmed_api.R`, `R/scopus_api.R`
+
+See: https://docs.openalex.org/
+
+## Load Packages and Functions
+
+```{r load-packages}
+library(dplyr)
+library(httr)
+library(jsonlite)
+
+source("../R/openalex_api.R")
+
+data_dir <- "../data/fusarium"
+```
+
+## Configuration
+
+```{r config}
+# Email for "polite pool" - gets faster rate limits
+# Replace with your email for production use
+OPENALEX_EMAIL <- "research@university.edu"
+
+tibble(
+  Parameter = c("Email (polite pool)", "API Base URL"),
+  Value = c(OPENALEX_EMAIL, "https://api.openalex.org/")
+) %>% kable()
+```
+
+## Search OpenAlex
+
+Search for Fusarium-related literature.
+
+```{r search-openalex}
+# Search for Fusarium head blight research
+fusarium_results <- openalex_search(
+  query = "fusarium head blight wheat temperature",
+  max_results = 100,
+  email = OPENALEX_EMAIL
+)
+
+tibble(
+  Metric = c("Articles found", "With abstracts", "With DOIs"),
+  Count = c(
+    nrow(fusarium_results),
+    sum(!is.na(fusarium_results$abstract)),
+    sum(!is.na(fusarium_results$doi))
+  )
+) %>% kable()
+```
+
+## Examine Results
+
+```{r examine-results}
+fusarium_results %>%
+  select(title, pub_year, journal, cited_by) %>%
+  head(10) %>%
+  mutate(title = substr(title, 1, 50)) %>%
+  kable()
+```
+
+## Abstract Coverage
+
+```{r abstract-coverage}
+abstract_stats <- fusarium_results %>%
+  summarise(
+    total = n(),
+    with_abstract = sum(!is.na(abstract)),
+    coverage_pct = round(with_abstract / total * 100, 1)
+  )
+
+tibble(
+  Metric = c("Total articles", "With abstracts", "Coverage %"),
+  Value = c(abstract_stats$total, abstract_stats$with_abstract, paste0(abstract_stats$coverage_pct, "%"))
+) %>% kable()
+```
+
+## Fetch Single Article by DOI
+
+Demonstrate fetching a specific article by DOI.
+
+```{r fetch-by-doi}
+# Example DOI - replace with actual DOI
+example_doi <- "10.1094/PDIS-06-19-1209-RE"
+
+article <- openalex_fetch_doi(example_doi, email = OPENALEX_EMAIL)
+
+if (!is.null(article)) {
+  tibble(
+    Field = c("Title", "Year", "Journal", "Citations", "Open Access"),
+    Value = c(
+      substr(article$title, 1, 60),
+      as.character(article$pub_year),
+      article$journal,
+      as.character(article$cited_by),
+      as.character(article$is_open_access)
+    )
+  ) %>% kable()
+} else {
+  message("Article not found in OpenAlex")
+}
+```
+
+## Fetch Abstracts for DOIs
+
+Useful for enriching datasets from other sources (e.g., Scopus without abstracts).
+
+```{r fetch-abstracts-for-dois}
+# Example: fetch abstracts for a few DOIs
+sample_dois <- c(
+  "10.1094/PDIS-06-19-1209-RE",
+  "10.1016/j.funbio.2020.01.001"
+)
+
+abstracts_df <- openalex_get_abstracts(
+  dois = sample_dois,
+  email = OPENALEX_EMAIL,
+  delay = 0.2
+)
+
+tibble(
+  DOI = abstracts_df$doi,
+  `Has Abstract` = !is.na(abstracts_df$abstract),
+  `Abstract Length` = nchar(abstracts_df$abstract)
+) %>% kable()
+```
+
+## Use Case: Enrich Scopus Data
+
+OpenAlex can supplement Scopus data when abstracts are not available.
+
+```{r enrich-scopus, eval=FALSE}
+# Load Scopus data (if available)
+scopus_file <- file.path(data_dir, "fusarium_scopus_full.rds")
+
+if (file.exists(scopus_file)) {
+  scopus_data <- readRDS(scopus_file)
+
+  # Find records missing abstracts
+  missing_abstracts <- scopus_data %>%
+    filter(is.na(abstract) | abstract == "") %>%
+    filter(!is.na(doi))
+
+  message(sprintf("Scopus records missing abstracts: %d", nrow(missing_abstracts)))
+
+  # Fetch from OpenAlex
+  if (nrow(missing_abstracts) > 0) {
+    openalex_abstracts <- openalex_get_abstracts(
+      dois = missing_abstracts$doi,
+      email = OPENALEX_EMAIL,
+      delay = 0.1
+    )
+
+    # Merge back
+    enriched <- scopus_data %>%
+      left_join(
+        openalex_abstracts %>% select(doi, openalex_abstract = abstract),
+        by = "doi"
+      ) %>%
+      mutate(
+        abstract = ifelse(is.na(abstract) | abstract == "", openalex_abstract, abstract)
+      ) %>%
+      select(-openalex_abstract)
+
+    message(sprintf("Abstracts after enrichment: %d", sum(!is.na(enriched$abstract))))
+  }
+}
+```
+
+## Save Results
+
+```{r save-results}
+output_file <- file.path(data_dir, "fusarium_openalex_sample.rds")
+saveRDS(fusarium_results, output_file)
+
+tibble(
+  Output = "OpenAlex sample",
+  Path = output_file,
+  Records = nrow(fusarium_results)
+) %>% kable()
+```
+
+## API Features Summary
+
+```{r api-summary}
+tibble(
+  Feature = c(
+    "Authentication",
+    "Rate limits",
+    "Abstracts",
+    "Citation counts",
+    "Open access info",
+    "Author affiliations",
+    "Pagination"
+  ),
+  Description = c(
+    "None required (email for polite pool recommended)",
+    "100k/day without email, 10M/day with email",
+    "Stored as inverted indices, reconstructed by API functions",
+    "Available (cited_by_count)",
+    "Available (is_oa field)",
+    "Available with institutions and countries",
+    "Cursor-based pagination supported"
+  )
+) %>% kable()
+```
+
+## Next Steps
+
+- Use OpenAlex to supplement abstracts from other sources
+- Combine with PubMed and Scopus data for comprehensive coverage
+- Proceed to `0100_load_fusarium_data.Rmd` to load combined datasets

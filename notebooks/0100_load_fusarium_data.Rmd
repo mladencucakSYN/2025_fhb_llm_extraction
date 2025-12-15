@@ -5,24 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Loading Research Data
+## Overview
 
-This notebook loads the Fusarium head blight literature dataset collected from Scopus, PubMed, and Web of Science. The dataset contains bibliographic information and abstracts from scientific studies.
-
-### Dataset Overview
-
-The student's research workflow:
-1. Initial search: 3,805 studies from three databases
-2. After deduplication: 2,663 unique studies
-3. Focus: Fusarium head blight in cereals under climate change
-
-This notebook handles loading and initial exploration of the full dataset.
+This notebook loads the Fusarium head blight literature dataset collected from Scopus and PubMed. The dataset contains bibliographic information and abstracts from scientific studies on Fusarium head blight in cereals under climate change conditions.
 
 ## Load Packages
-
-Load required packages for data manipulation and text processing.
 
 ```{r load-packages}
 library(dplyr)
@@ -30,293 +20,136 @@ library(readr)
 library(stringr)
 library(ggplot2)
 library(tidyr)
-
-cat("✓ Packages loaded\n")
 ```
-
-**Result**: Data manipulation and visualization packages ready.
 
 ## Define Data Location
 
-Specify where the Fusarium dataset is stored.
-
 ```{r data-location}
-# Data file path
 data_dir <- "../data/fusarium"
 data_file <- file.path(data_dir, "fusarium_studies.csv")
 
-cat("Data location:", data_file, "\n")
-cat("Directory exists:", dir.exists(data_dir), "\n")
-cat("File exists:", file.exists(data_file), "\n")
+tibble(
+  Parameter = c("Data directory", "Data file", "Directory exists", "File exists"),
+  Value = c(data_dir, data_file, dir.exists(data_dir), file.exists(data_file))
+) %>% kable()
 ```
-
-**Result**: Data file location defined and existence checked.
-
-## Expected Data Structure
-
-Document the expected structure of the Fusarium dataset.
-
-```{r expected-structure}
-cat("Expected CSV Columns:\n")
-cat(rep("-", 50), "\n", sep = "")
-cat("  - id: Unique study identifier\n")
-cat("  - title: Paper title\n")
-cat("  - abstract: Paper abstract\n")
-cat("  - authors: Author list\n")
-cat("  - year: Publication year\n")
-cat("  - journal: Journal name\n")
-cat("  - doi: Digital Object Identifier\n")
-cat("  - keywords: Author keywords\n")
-cat("  - database: Source database (Scopus/PubMed/WoS)\n")
-cat(rep("-", 50), "\n", sep = "")
-```
-
-**Result**: Expected data schema documented for reference.
-
-## Create Sample Data
-
-If the actual dataset is not yet available, create sample data for testing.
-
-```{r create-sample}
-if (!file.exists(data_file)) {
-  cat("⚠ Data file not found. Creating sample data for testing...\n\n")
-
-  # Create sample Fusarium studies
-  sample_data <- tibble(
-    id = paste0("STUDY_", 1:20),
-    title = c(
-      "Temperature effects on Fusarium graminearum growth in wheat",
-      "Moisture and mycotoxin production in barley infected with F. culmorum",
-      "Climate change impacts on Fusarium head blight severity",
-      "Fungicide efficacy against Fusarium in different temperature regimes",
-      "Drought stress and DON accumulation in wheat kernels",
-      "Modeling Fusarium infection risk under climate scenarios",
-      "Crop rotation effects on Fusarium population dynamics",
-      "Temperature and relative humidity influence on F. graminearum",
-      "Predictive models for mycotoxin contamination in cereals",
-      "Adaptive management strategies for FHB under warming climate",
-      "Rainfall patterns and Fusarium head blight incidence",
-      "Thermal requirements for Fusarium species on wheat",
-      "Water stress interactions with fungal pathogens in barley",
-      "Climate variables affecting toxin production in oats",
-      "Machine learning models for FHB prediction",
-      "Agronomic practices reducing Fusarium in sustainable systems",
-      "Temperature-dependent infection dynamics of F. avenaceum",
-      "Humidity thresholds for mycotoxin synthesis",
-      "Regional climate impacts on cereal disease pressure",
-      "Integrated pest management for Fusarium under climate change"
-    ),
-    abstract = c(
-      "This study investigated the effect of temperature on Fusarium graminearum growth and development in wheat. Temperatures ranging from 15°C to 30°C were tested. Results showed optimal growth at 25°C with significant reduction above 30°C.",
-      "We examined moisture conditions and their impact on mycotoxin production in barley infected with Fusarium culmorum. High moisture (>80% RH) significantly increased DON production.",
-      "Climate change scenarios predict increased temperature and altered precipitation. We modeled the impact on Fusarium head blight severity across wheat-growing regions.",
-      "Fungicide application timing and efficacy were evaluated under different temperature regimes. Results demonstrate temperature-dependent fungicide performance.",
-      "Drought stress during grain filling interacted with Fusarium infection to increase deoxynivalenol (DON) accumulation in wheat kernels.",
-      "A mechanistic model was developed to predict Fusarium infection risk based on temperature, humidity, and rainfall during flowering.",
-      "Three-year crop rotation with non-host crops reduced Fusarium inoculum levels by 65% compared to continuous wheat cultivation.",
-      "Temperature and relative humidity were manipulated to determine optimal conditions for F. graminearum infection. Critical thresholds identified.",
-      "Machine learning algorithms were trained on historical weather and disease data to predict mycotoxin contamination risk in cereals.",
-      "Adaptive management strategies including cultivar selection, fungicide timing, and harvest management were evaluated for FHB control under future climate projections.",
-      "Rainfall frequency and intensity during anthesis correlated strongly with Fusarium head blight incidence in spring wheat.",
-      "Thermal time models were parameterized for five Fusarium species to predict infection timing based on accumulated degree-days.",
-      "Water stress increased susceptibility to Fusarium infection in barley through compromised plant defense mechanisms.",
-      "Multiple climate variables including temperature, humidity, and rainfall explained 78% of variation in trichothecene levels in oats.",
-      "Random forest and neural network models achieved 85% accuracy in predicting high-risk periods for FHB development.",
-      "Reduced tillage, crop diversity, and biocontrol agents were integrated to suppress Fusarium in organic farming systems.",
-      "Temperature-dependent development rates of F. avenaceum were quantified across 10-35°C range using controlled environment studies.",
-      "Relative humidity above 85% for >48 hours during grain filling was identified as critical threshold for zearalenone synthesis.",
-      "Regional analysis across Europe revealed differential climate change impacts on disease pressure, with northern regions showing increased risk.",
-      "Integrated pest management combining resistant cultivars, biocontrol, and precision fungicide application reduced FHB by 72% in climate-smart agriculture trials."
-    ),
-    authors = rep("Sample Author et al.", 20),
-    year = sample(2018:2024, 20, replace = TRUE),
-    journal = sample(c("Plant Disease", "Phytopathology", "Agricultural and Forest Meteorology", "Crop Protection"), 20, replace = TRUE),
-    doi = paste0("10.1234/sample.", 1:20),
-    keywords = c(
-      "Fusarium graminearum, wheat, temperature, growth",
-      "Fusarium culmorum, barley, moisture, mycotoxins, DON",
-      "climate change, Fusarium head blight, modeling",
-      "fungicide, temperature, efficacy",
-      "drought stress, DON, wheat",
-      "modeling, infection risk, climate",
-      "crop rotation, Fusarium, inoculum",
-      "temperature, humidity, F. graminearum",
-      "machine learning, mycotoxins, prediction",
-      "adaptation, management, climate change",
-      "rainfall, FHB, incidence",
-      "thermal time, Fusarium species, models",
-      "water stress, barley, susceptibility",
-      "climate variables, trichothecenes, oats",
-      "machine learning, FHB, prediction models",
-      "sustainable agriculture, Fusarium, biocontrol",
-      "F. avenaceum, temperature, development",
-      "humidity, zearalenone, threshold",
-      "Europe, regional analysis, climate impacts",
-      "IPM, climate-smart agriculture, FHB management"
-    ),
-    database = sample(c("Scopus", "PubMed", "Web of Science"), 20, replace = TRUE)
-  )
-
-  # Ensure directory exists
-  dir.create(data_dir, showWarnings = FALSE, recursive = TRUE)
-
-  # Save sample data
-  write_csv(sample_data, data_file)
-
-  cat("✓ Created sample dataset with", nrow(sample_data), "studies\n")
-  cat("  File saved to:", data_file, "\n\n")
-  cat("⚠ NOTE: This is sample data for testing.\n")
-  cat("  Replace with actual data from your literature search.\n")
-}
-```
-
-**Result**: Sample data created if actual dataset not available.
 
 ## Load Data
 
-Read the Fusarium study dataset into R.
-
 ```{r load-data}
-cat("Loading Fusarium dataset...\n")
+if (!file.exists(data_file)) {
+  stop(paste("Data file not found:", data_file,
+             "\nRun notebooks 0090 and 0095 first to fetch and merge the data."))
+}
 
 fusarium_data <- read_csv(
   data_file,
   col_types = cols(
+    pmid = col_character(),
     id = col_character(),
     title = col_character(),
     abstract = col_character(),
     authors = col_character(),
-    year = col_integer(),
+    affiliations = col_character(),
+    countries = col_character(),
+    pub_year = col_integer(),
     journal = col_character(),
     doi = col_character(),
     keywords = col_character(),
-    database = col_character()
+    mesh_terms = col_character(),
+    pub_types = col_character(),
+    grants = col_character(),
+    ref_count = col_integer(),
+    source = col_character()
   )
 )
 
-cat("✓ Data loaded successfully\n")
-cat("  Rows:", nrow(fusarium_data), "\n")
-cat("  Columns:", ncol(fusarium_data), "\n")
+fusarium_data <- fusarium_data %>%
+  rename(year = pub_year, database = source)
 ```
 
-**Result**: Dataset loaded into R with appropriate column types.
+## Dataset Overview
 
-## Initial Data Exploration
-
-Examine the structure and first few records.
-
-```{r explore-structure}
-cat("Dataset Structure:\n")
-cat(rep("-", 50), "\n", sep = "")
-str(fusarium_data)
-cat("\n")
-
-cat("First 3 records:\n")
-cat(rep("-", 50), "\n", sep = "")
-print(head(fusarium_data, 3))
+```{r dataset-overview}
+tibble(
+  Metric = c("Total records", "Columns", "File size (KB)"),
+  Value = c(
+    format(nrow(fusarium_data), big.mark = ","),
+    ncol(fusarium_data),
+    round(file.size(data_file) / 1024, 1)
+  )
+) %>% kable()
 ```
 
-**Result**: Data structure and sample records displayed for verification.
+## Column Summary
 
-## Check for Missing Values
-
-Identify missing data across all columns.
-
-```{r check-missing}
-cat("Missing Values Summary:\n")
-cat(rep("-", 50), "\n", sep = "")
-
-missing_summary <- fusarium_data %>%
-  summarise(across(everything(), ~sum(is.na(.)))) %>%
-  pivot_longer(everything(), names_to = "column", values_to = "missing_count") %>%
-  mutate(
-    missing_pct = missing_count / nrow(fusarium_data) * 100
-  ) %>%
-  arrange(desc(missing_count))
-
-print(missing_summary)
-
-cat(rep("-", 50), "\n", sep = "")
-cat("\nCritical fields (abstract, title) with missing values:\n")
-critical_missing <- missing_summary %>%
-  filter(column %in% c("abstract", "title"), missing_count > 0)
-
-if (nrow(critical_missing) > 0) {
-  print(critical_missing)
-  cat("\n⚠ Missing abstracts/titles will need handling\n")
-} else {
-  cat("✓ No missing abstracts or titles\n")
-}
+```{r column-summary}
+tibble(
+  Column = names(fusarium_data),
+  Type = sapply(fusarium_data, class),
+  `Non-NA Count` = sapply(fusarium_data, function(x) sum(!is.na(x))),
+  `NA Count` = sapply(fusarium_data, function(x) sum(is.na(x))),
+  `NA %` = round(sapply(fusarium_data, function(x) mean(is.na(x)) * 100), 1)
+) %>% kable()
 ```
-
-**Result**: Missing value patterns identified for data quality assessment.
 
 ## Publication Year Distribution
 
-Examine the temporal distribution of studies.
-
-```{r year-distribution}
-cat("Publication Year Distribution:\n")
-cat(rep("-", 50), "\n", sep = "")
-
+```{r year-distribution, fig.width=10, fig.height=5}
 year_counts <- fusarium_data %>%
-  count(year, sort = TRUE)
+  filter(!is.na(year)) %>%
+  count(year, name = "n_studies") %>%
+  arrange(year)
 
-print(year_counts)
-
-# Plot
-ggplot(year_counts, aes(x = year, y = n)) +
+ggplot(year_counts, aes(x = year, y = n_studies)) +
   geom_col(fill = "steelblue") +
-  geom_text(aes(label = n), vjust = -0.5, size = 3) +
+  geom_text(aes(label = n_studies), vjust = -0.5, size = 3) +
+  scale_x_continuous(breaks = seq(min(year_counts$year), max(year_counts$year), by = 2)) +
   labs(
-    title = "Fusarium Studies by Publication Year",
+    title = "Publications by Year",
     x = "Year",
     y = "Number of Studies"
   ) +
   theme_minimal() +
-  theme(plot.title = element_text(face = "bold"))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-**Result**: Publication years range from recent to older studies, showing research trends over time.
+```{r year-summary}
+year_counts %>%
+  summarise(
+    `Year Range` = paste(min(year), "-", max(year)),
+    `Total Years` = n(),
+    `Peak Year` = year[which.max(n_studies)],
+    `Peak Count` = max(n_studies),
+    `Mean per Year` = round(mean(n_studies), 1)
+  ) %>% kable()
+```
 
 ## Database Source Distribution
 
-Check which databases contributed most studies.
-
-```{r database-distribution}
-cat("\nDatabase Source Distribution:\n")
-cat(rep("-", 50), "\n", sep = "")
-
+```{r database-distribution, fig.width=8, fig.height=4}
 database_counts <- fusarium_data %>%
-  count(database, sort = TRUE) %>%
-  mutate(percentage = n / sum(n) * 100)
+  count(database, name = "n_studies") %>%
+  mutate(percentage = round(n_studies / sum(n_studies) * 100, 1)) %>%
+  arrange(desc(n_studies))
 
-print(database_counts)
-
-# Plot
-ggplot(database_counts, aes(x = reorder(database, -n), y = n)) +
+ggplot(database_counts, aes(x = reorder(database, -n_studies), y = n_studies)) +
   geom_col(fill = "darkgreen") +
-  geom_text(aes(label = sprintf("%d (%.1f%%)", n, percentage)),
-            vjust = -0.5, size = 3) +
+  geom_text(aes(label = paste0(n_studies, " (", percentage, "%)")),
+            vjust = -0.5, size = 4) +
   labs(
     title = "Studies by Database Source",
     x = "Database",
     y = "Number of Studies"
   ) +
-  theme_minimal() +
-  theme(plot.title = element_text(face = "bold"))
+  theme_minimal()
+
+database_counts %>% kable()
 ```
 
-**Result**: Distribution across Scopus, PubMed, and Web of Science shown.
+## Text Length Analysis
 
-## Text Length Statistics
-
-Analyze abstract and title lengths to understand text volume.
-
-```{r text-lengths}
-cat("\nText Length Statistics:\n")
-cat(rep("-", 50), "\n", sep = "")
-
+```{r text-lengths, fig.width=10, fig.height=5}
 fusarium_data <- fusarium_data %>%
   mutate(
     title_length = nchar(title),
@@ -324,147 +157,117 @@ fusarium_data <- fusarium_data %>%
     total_text_length = title_length + abstract_length
   )
 
-text_stats <- fusarium_data %>%
-  summarise(
-    mean_title = mean(title_length, na.rm = TRUE),
-    mean_abstract = mean(abstract_length, na.rm = TRUE),
-    median_abstract = median(abstract_length, na.rm = TRUE),
-    min_abstract = min(abstract_length, na.rm = TRUE),
-    max_abstract = max(abstract_length, na.rm = TRUE)
+tibble(
+  Field = c("Title", "Abstract", "Total"),
+  `Mean Length` = c(
+    round(mean(fusarium_data$title_length, na.rm = TRUE)),
+    round(mean(fusarium_data$abstract_length, na.rm = TRUE)),
+    round(mean(fusarium_data$total_text_length, na.rm = TRUE))
+  ),
+  `Median Length` = c(
+    median(fusarium_data$title_length, na.rm = TRUE),
+    median(fusarium_data$abstract_length, na.rm = TRUE),
+    median(fusarium_data$total_text_length, na.rm = TRUE)
+  ),
+  `Min` = c(
+    min(fusarium_data$title_length, na.rm = TRUE),
+    min(fusarium_data$abstract_length, na.rm = TRUE),
+    min(fusarium_data$total_text_length, na.rm = TRUE)
+  ),
+  `Max` = c(
+    max(fusarium_data$title_length, na.rm = TRUE),
+    max(fusarium_data$abstract_length, na.rm = TRUE),
+    max(fusarium_data$total_text_length, na.rm = TRUE)
   )
+) %>% kable()
 
-print(text_stats)
-
-# Abstract length distribution
 ggplot(fusarium_data, aes(x = abstract_length)) +
-  geom_histogram(bins = 30, fill = "coral", alpha = 0.7) +
+  geom_histogram(bins = 50, fill = "coral", alpha = 0.7) +
   geom_vline(aes(xintercept = median(abstract_length, na.rm = TRUE)),
-             color = "red", linetype = "dashed", size = 1) +
+             color = "red", linetype = "dashed", linewidth = 1) +
   labs(
     title = "Distribution of Abstract Lengths",
-    subtitle = "Red line indicates median length",
+    subtitle = paste("Median:", median(fusarium_data$abstract_length, na.rm = TRUE), "characters"),
     x = "Abstract Length (characters)",
     y = "Count"
   ) +
   theme_minimal()
 ```
 
-**Result**: Most abstracts range from 1000-2000 characters, suitable for LLM extraction.
-
-## Check for Duplicates
-
-Verify deduplication was successful.
+## Duplicate Check
 
 ```{r check-duplicates}
-cat("\nDuplication Check:\n")
-cat(rep("-", 50), "\n", sep = "")
-
-# Check exact title duplicates
 title_duplicates <- fusarium_data %>%
+  filter(!is.na(title)) %>%
   group_by(title) %>%
   filter(n() > 1) %>%
   ungroup()
 
-cat("Exact title duplicates:", nrow(title_duplicates), "\n")
-
-# Check DOI duplicates
 doi_duplicates <- fusarium_data %>%
   filter(!is.na(doi)) %>%
   group_by(doi) %>%
   filter(n() > 1) %>%
   ungroup()
 
-cat("DOI duplicates:", nrow(doi_duplicates), "\n")
-
-if (nrow(title_duplicates) > 0) {
-  cat("\n⚠ Warning: Found", nrow(title_duplicates), "potential duplicates\n")
-  cat("  Review these records before proceeding\n")
-} else {
-  cat("\n✓ No duplicates found - deduplication successful\n")
-}
+tibble(
+  Check = c("Title duplicates", "DOI duplicates"),
+  Count = c(nrow(title_duplicates), nrow(doi_duplicates)),
+  Status = c(
+    ifelse(nrow(title_duplicates) == 0, "OK", "Review needed"),
+    ifelse(nrow(doi_duplicates) == 0, "OK", "Review needed")
+  )
+) %>% kable()
 ```
 
-**Result**: Deduplication status verified, potential duplicates flagged if found.
+## Save Processed Data
 
-## Save Processed Data Summary
-
-Create a summary file for reference.
-
-```{r save-summary}
-cat("\nCreating data summary...\n")
-
+```{r save-data}
 summary_stats <- list(
   total_records = nrow(fusarium_data),
-  date_loaded = Sys.Date(),
-  year_range = range(fusarium_data$year, na.rm = TRUE),
-  databases = unique(fusarium_data$database),
+  date_loaded = as.character(Sys.Date()),
+  year_range = paste(range(fusarium_data$year, na.rm = TRUE), collapse = "-"),
+  databases = paste(unique(fusarium_data$database), collapse = ", "),
   missing_abstracts = sum(is.na(fusarium_data$abstract)),
-  mean_abstract_length = mean(fusarium_data$abstract_length, na.rm = TRUE)
+  mean_abstract_length = round(mean(fusarium_data$abstract_length, na.rm = TRUE))
 )
 
-# Save summary
 summary_file <- file.path(data_dir, "data_summary.txt")
-cat(yaml::as.yaml(summary_stats), file = summary_file)
+writeLines(yaml::as.yaml(summary_stats), summary_file)
 
-cat("✓ Summary saved to:", summary_file, "\n")
-```
-
-**Result**: Data summary statistics saved for documentation.
-
-## Data Loading Summary
-
-Final summary of loaded data.
-
-```{r final-summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║          DATA LOADING COMPLETE                     ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Dataset Summary:\n")
-cat(rep("-", 50), "\n", sep = "")
-cat("Total Studies:      ", nrow(fusarium_data), "\n")
-cat("Publication Years:  ", min(fusarium_data$year, na.rm = TRUE), "-",
-    max(fusarium_data$year, na.rm = TRUE), "\n")
-cat("Databases:          ", paste(unique(fusarium_data$database), collapse = ", "), "\n")
-cat("Missing Abstracts:  ", sum(is.na(fusarium_data$abstract)), "\n")
-cat("Mean Abstract Length:", round(mean(fusarium_data$abstract_length, na.rm = TRUE)), "chars\n")
-cat(rep("-", 50), "\n", sep = "")
-
-cat("\n✓ Data ready for preprocessing (notebook 0110)\n")
-```
-
-**Result**: Full dataset successfully loaded and characterized.
-
-## Save Processed Dataset
-
-Save the loaded data with calculated fields for use in subsequent notebooks.
-
-```{r save-processed}
 processed_file <- file.path(data_dir, "fusarium_studies_loaded.rds")
 saveRDS(fusarium_data, processed_file)
 
-cat("\n✓ Processed data saved to:", processed_file, "\n")
-cat("  This file will be used in subsequent notebooks\n")
+tibble(
+  Output = c("Summary file", "Processed data"),
+  Path = c(summary_file, processed_file),
+  Status = c(
+    ifelse(file.exists(summary_file), "Saved", "Failed"),
+    ifelse(file.exists(processed_file), "Saved", "Failed")
+  )
+) %>% kable()
 ```
 
-**Result**: Processed dataset saved in R-native format for efficient loading.
+## Summary
+
+```{r final-summary}
+tibble(
+  Metric = c(
+    "Total Studies",
+    "Publication Years",
+    "Databases",
+    "Missing Abstracts",
+    "Mean Abstract Length"
+  ),
+  Value = c(
+    format(nrow(fusarium_data), big.mark = ","),
+    paste(range(fusarium_data$year, na.rm = TRUE), collapse = " - "),
+    paste(unique(fusarium_data$database), collapse = ", "),
+    sum(is.na(fusarium_data$abstract)),
+    paste(round(mean(fusarium_data$abstract_length, na.rm = TRUE)), "chars")
+  )
+) %>% kable()
+```
 
 ## Next Steps
 
-1. ✓ Loaded Fusarium research dataset
-2. ✓ Verified data quality and structure
-3. ✓ Identified missing values and duplicates
-4. Next: Preprocess abstracts in `0110_preprocess_abstracts.Rmd`
-5. Then: Exploratory analysis in `0120_exploratory_analysis.Rmd`
-
-## Note for Student
-
-If you have the actual dataset from your literature search:
-1. Export from your reference manager as CSV
-2. Ensure columns match expected structure above
-3. Save to: `data/fusarium/fusarium_studies.csv`
-4. Re-run this notebook to load your actual data
-
-The sample data provided here is for testing the extraction pipeline. Replace it with your real dataset before final analysis.
+Proceed to `0110_preprocess_abstracts.Rmd` for text cleaning and preparation.

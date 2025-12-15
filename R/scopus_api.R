@@ -33,7 +33,7 @@ library(purrr)
 scopus_search <- function(query,
                           count = 200,
                           api_key = Sys.getenv("SCOPUS_API_KEY"),
-                          view = "COMPLETE",
+                          view = "STANDARD",
                           start = 0) {
 
   if (nchar(api_key) == 0) {
@@ -183,7 +183,7 @@ scopus_search_all <- function(query,
 
   all_articles <- list()
   current_start <- 0
-  count_per_request <- 200  # Scopus maximum
+  count_per_request <- 25  # STANDARD view limit
 
   # Calculate number of requests needed
   n_requests <- ceiling(max_results / count_per_request)

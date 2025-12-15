@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Prompt Engineering for Extraction
+## Overview
 
 This notebook develops and tests extraction prompts for Fusarium research data. Effective prompts are critical for accurate LLM extraction.
+
+## Load Packages and Data
 
 ```{r load-packages}
 library(dplyr)
@@ -20,26 +23,23 @@ source("../R/gemini_extraction.R")
 data_dir <- "../data/fusarium"
 ```
 
-**Result**: Ready for prompt development.
-
-## Load Test Sample
-
 ```{r load-sample}
 sample_10 <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
 
-cat("✓ Loaded test sample of", nrow(sample_10), "studies\n")
+tibble(
+  Dataset = "Test sample",
+  Studies = nrow(sample_10)
+) %>% kable()
 ```
-
-**Result**: 10-study test sample loaded.
 
 ## Build Extraction Prompt
 
-Create comprehensive extraction prompt based on schema.
-
 ```{r build-prompt}
 build_extraction_prompt <- function(title, abstract, keywords = "") {
+  title <- if (is.null(title) || is.na(title)) "" else as.character(title)
+  abstract <- if (is.null(abstract) || is.na(abstract)) "" else as.character(abstract)
+  keywords <- if (is.null(keywords) || is.na(keywords)) "" else as.character(keywords)
 
-  # Combine text
   full_text <- paste(
     if (nchar(title) > 0) paste("Title:", title) else "",
     if (nchar(abstract) > 0) paste("Abstract:", abstract) else "",
@@ -47,7 +47,6 @@ build_extraction_prompt <- function(title, abstract, keywords = "") {
     sep = "\n\n"
   )
 
-  # Build prompt
   prompt <- sprintf('
 Extract structured information about Fusarium species research on cereal crops.
 
@@ -57,40 +56,14 @@ TEXT TO ANALYZE:
 EXTRACT THE FOLLOWING INFORMATION:
 
 1. fusarium_species: Array of Fusarium species names mentioned
-   - Include full names (e.g., "Fusarium graminearum") or abbreviations (e.g., "F. culmorum")
-   - If none mentioned, return empty array []
-
 2. crop: Array of cereal crops studied
-   - Examples: wheat, barley, maize, oats, rye
-   - If none mentioned, return empty array []
-
 3. abiotic_factors: Array of environmental factors investigated
-   - Examples: temperature, moisture, humidity, drought, rainfall, water stress
-   - If none mentioned, return empty array []
-
 4. mycotoxins: Array of mycotoxins studied
-   - Examples: DON, deoxynivalenol, zearalenone, nivalenol, T-2 toxin
-   - If none mentioned, return empty array []
-
 5. observed_effects: Array of effects on crop or disease
-   - Examples: yield loss, disease severity, toxin production, infection rate
-   - If none mentioned, return empty array []
-
 6. agronomic_practices: Array of management practices mentioned
-   - Examples: fungicide, crop rotation, resistant cultivars, tillage
-   - If none mentioned, return empty array []
-
 7. modeling: Boolean indicating if study involves predictive modeling
-   - true if study uses models, simulations, or predictions
-   - false otherwise
-
 8. study_type: Array of study methodology types
-   - Options: field, greenhouse, laboratory, modeling, meta-analysis
-   - If unclear, return empty array []
-
 9. summary: Brief 1-2 sentence summary of main findings
-   - Focus on key results related to Fusarium, crops, and abiotic factors
-   - If insufficient information, write "Insufficient information for summary"
 
 RETURN ONLY VALID JSON IN THIS EXACT FORMAT:
 {
@@ -107,28 +80,23 @@ RETURN ONLY VALID JSON IN THIS EXACT FORMAT:
 
 IMPORTANT:
 - Return ONLY the JSON, no other text
-- Use empty arrays [] for missing information, not null
+- Use empty arrays [] for missing information
 - Use lowercase for crop names and factors
-- Be specific and accurate
 ', full_text)
 
   prompt
 }
-
-cat("✓ Prompt template created\n")
 ```
-
-**Result**: Comprehensive extraction prompt template defined.
 
 ## Test Prompt on Single Study
 
-Test the prompt on one study to verify output format.
-
 ```{r test-single}
-cat("\n=== Testing on Study 1 ===\n")
-
 test_study <- sample_10[1, ]
-cat("Title:", test_study$title, "\n\n")
+
+tibble(
+  Field = c("ID", "Title"),
+  Value = c(test_study$id, substr(test_study$title, 1, 60))
+) %>% kable()
 
 prompt <- build_extraction_prompt(
   title = test_study$title,
@@ -136,40 +104,37 @@ prompt <- build_extraction_prompt(
   keywords = test_study$keywords_clean
 )
 
-cat("Calling Gemini API...\n")
 response <- simple_gemini(prompt)
 
-cat("\nResponse:\n")
-cat(response, "\n")
-
-# Try to parse JSON
 parsed <- tryCatch({
   fromJSON(response)
 }, error = function(e) {
-  cat("\n✗ JSON parsing failed:", conditionMessage(e), "\n")
   NULL
 })
 
 if (!is.null(parsed)) {
-  cat("\n✓ Successfully parsed JSON:\n")
-  str(parsed)
+  tibble(
+    Field = names(parsed),
+    Value = sapply(parsed, function(x) {
+      if (is.list(x)) paste(unlist(x), collapse = ", ")
+      else as.character(x)
+    })
+  ) %>% kable()
 }
 ```
 
-**Result**: Prompt tested on single study, JSON output validated.
-
 ## Test on Multiple Studies
 
-Test prompt on 5 studies to assess consistency.
-
 ```{r test-multiple}
-cat("\n=== Testing on 5 Studies ===\n\n")
-
 results <- list()
+test_results <- tibble(
+  Study = integer(),
+  Status = character(),
+  Species = integer(),
+  Crops = integer()
+)
 
-for (i in 1:5) {
-  cat(sprintf("[%d/5] Processing: %s\n", i, substr(sample_10$title[i], 1, 50)))
-
+for (i in 1:min(5, nrow(sample_10))) {
   prompt <- build_extraction_prompt(
     title = sample_10$title[i],
     abstract = sample_10$abstract_clean[i],
@@ -180,94 +145,80 @@ for (i in 1:5) {
     response <- simple_gemini(prompt)
     parsed <- fromJSON(response)
     parsed$id <- sample_10$id[i]
-    cat("  ✓ Success\n")
+    results[[i]] <- parsed
+
+    test_results <- bind_rows(test_results, tibble(
+      Study = i,
+      Status = "Success",
+      Species = length(parsed$fusarium_species),
+      Crops = length(parsed$crop)
+    ))
+
     parsed
   }, error = function(e) {
-    cat("  ✗ Error:", conditionMessage(e), "\n")
+    test_results <<- bind_rows(test_results, tibble(
+      Study = i,
+      Status = "Error",
+      Species = NA_integer_,
+      Crops = NA_integer_
+    ))
     NULL
   })
 
-  if (!is.null(result)) {
-    results[[i]] <- result
-  }
-
-  # Respectful delay
   Sys.sleep(2)
 }
 
-cat("\n✓ Tested on 5 studies\n")
-cat("  Successful:", length(results), "/5\n")
+test_results %>% kable()
 ```
 
-**Result**: Prompt performs consistently across multiple studies.
-
-## Analyze Extraction Results
-
-Examine what was extracted to validate prompt effectiveness.
+## Extraction Analysis
 
 ```{r analyze-results}
 if (length(results) > 0) {
-  cat("\n=== Extraction Analysis ===\n\n")
+  analysis <- tibble(
+    Study = seq_along(results),
+    Species = sapply(results, function(r) length(r$fusarium_species)),
+    Crops = sapply(results, function(r) length(r$crop)),
+    `Abiotic Factors` = sapply(results, function(r) length(r$abiotic_factors)),
+    Mycotoxins = sapply(results, function(r) length(r$mycotoxins)),
+    Modeling = sapply(results, function(r) r$modeling)
+  )
 
-  # Count non-empty fields
-  for (i in seq_along(results)) {
-    result <- results[[i]]
-    cat(sprintf("\nStudy %d:\n", i))
-    cat("  Fusarium species:", length(result$fusarium_species), "\n")
-    cat("  Crops:", length(result$crop), "\n")
-    cat("  Abiotic factors:", length(result$abiotic_factors), "\n")
-    cat("  Mycotoxins:", length(result$mycotoxins), "\n")
-    cat("  Practices:", length(result$agronomic_practices), "\n")
-    cat("  Modeling:", result$modeling, "\n")
-    cat("  Summary:", substr(result$summary, 1, 60), "...\n")
-  }
+  analysis %>% kable()
 }
 ```
 
-**Result**: Extraction captures relevant information across all fields.
-
-## Save Prompt Template
+## Save Prompt Documentation
 
 ```{r save-prompt}
 prompt_doc <- list(
   version = "1.0",
-  date = Sys.Date(),
-  prompt_template = "See build_extraction_prompt() function",
+  date = as.character(Sys.Date()),
   notes = "Prompt includes detailed instructions for each field and JSON output format"
 )
 
 prompt_file <- file.path(data_dir, "extraction_prompt_v1.json")
 write_json(prompt_doc, prompt_file, pretty = TRUE)
 
-cat("✓ Prompt documentation saved:", prompt_file, "\n")
+tibble(
+  Output = "Prompt documentation",
+  Path = prompt_file
+) %>% kable()
 ```
-
-**Result**: Prompt template documented for future reference.
 
 ## Summary
 
 ```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║         EXTRACTION PROMPT DEVELOPED                ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Prompt characteristics:\n")
-cat("  ✓ Clear field definitions\n")
-cat("  ✓ Examples for each field\n")
-cat("  ✓ Explicit JSON format\n")
-cat("  ✓ Handles missing information\n")
-cat("  ✓ Tested on multiple studies\n\n")
-
-cat("Next: Test single extraction (notebook 0320)\n")
+tibble(
+  Metric = c("Studies tested", "Successful extractions", "Success rate"),
+  Value = c(
+    nrow(test_results),
+    sum(test_results$Status == "Success"),
+    paste0(round(mean(test_results$Status == "Success") * 100), "%")
+  )
+) %>% kable()
 ```
-
-**Result**: Production-ready extraction prompt developed and validated.
 
 ## Next Steps
 
-1. ✓ Built extraction prompt template
-2. ✓ Tested on single study
-3. ✓ Validated on 5 studies
-4. Next: Refine extraction in `0320_single_extraction_test.Rmd`
+Proceed to `0320_single_extraction_test.Rmd` to refine extraction testing.

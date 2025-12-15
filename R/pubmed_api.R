@@ -201,7 +201,6 @@ parse_pubmed_article <- function(article) {
   # Abstract (combine all AbstractText nodes)
   abstract_nodes <- xml_find_all(article, ".//Abstract/AbstractText")
   if (length(abstract_nodes) > 0) {
-    # Some abstracts have labeled sections
     abstract_parts <- map_chr(abstract_nodes, function(node) {
       label <- xml_attr(node, "Label")
       text <- xml_text(node)
@@ -223,7 +222,7 @@ parse_pubmed_article <- function(article) {
     keywords <- NA_character_
   }
 
-  # Authors
+  # Authors with affiliations
   author_nodes <- xml_find_all(article, ".//AuthorList/Author")
   if (length(author_nodes) > 0) {
     author_names <- map_chr(author_nodes, function(author) {
@@ -241,16 +240,46 @@ parse_pubmed_article <- function(article) {
     authors <- NA_character_
   }
 
+  # Affiliations (all unique)
+  affil_nodes <- xml_find_all(article, ".//AffiliationInfo/Affiliation")
+  if (length(affil_nodes) > 0) {
+    affiliations <- paste(unique(xml_text(affil_nodes)), collapse = " | ")
+  } else {
+    affiliations <- NA_character_
+  }
+
+  # Extract countries from affiliations
+  if (!is.na(affiliations)) {
+    # Common country patterns at end of affiliation strings
+    country_pattern <- paste0(
+      "(USA|United States|UK|United Kingdom|China|Germany|France|Italy|",
+      "Spain|Poland|Netherlands|Canada|Australia|Brazil|India|Japan|",
+      "Sweden|Denmark|Norway|Finland|Belgium|Austria|Switzerland|",
+      "Czech Republic|Hungary|Argentina|Mexico|South Korea|Iran|Turkey|",
+      "Egypt|South Africa|New Zealand|Ireland|Portugal|Greece|Romania|",
+      "Russia|Ukraine|Serbia|Croatia|Slovenia|Slovakia)\\.?$"
+    )
+    country_matches <- stringr::str_extract_all(
+      affiliations,
+      stringr::regex(country_pattern, ignore_case = TRUE)
+    )[[1]]
+    countries <- if (length(country_matches) > 0) {
+      paste(unique(country_matches), collapse = "; ")
+    } else {
+      NA_character_
+    }
+  } else {
+    countries <- NA_character_
+  }
+
   # Journal
   journal <- safe_text(".//Journal/Title")
 
   # Publication year
   pub_year <- safe_text(".//PubDate/Year")
   if (is.na(pub_year)) {
-    # Try MedlineDate if Year not found
     medline_date <- safe_text(".//PubDate/MedlineDate")
     if (!is.na(medline_date)) {
-      # Extract first 4 digits as year
       pub_year <- sub("^(\\d{4}).*", "\\1", medline_date)
     }
   }
@@ -271,17 +300,53 @@ parse_pubmed_article <- function(article) {
     mesh_terms <- NA_character_
   }
 
+  # Publication types
+  pubtype_nodes <- xml_find_all(article, ".//PublicationTypeList/PublicationType")
+  if (length(pubtype_nodes) > 0) {
+    pub_types <- paste(xml_text(pubtype_nodes), collapse = "; ")
+  } else {
+    pub_types <- NA_character_
+  }
+
+  # Grant/funding info
+  grant_nodes <- xml_find_all(article, ".//GrantList/Grant")
+  if (length(grant_nodes) > 0) {
+    grant_info <- map_chr(grant_nodes, function(g) {
+      agency <- xml_text(xml_find_first(g, ".//Agency"))
+      country <- xml_text(xml_find_first(g, ".//Country"))
+      if (!is.na(agency)) {
+        if (!is.na(country)) {
+          return(paste0(agency, " (", country, ")"))
+        }
+        return(agency)
+      }
+      return(NA_character_)
+    })
+    grants <- paste(unique(grant_info[!is.na(grant_info)]), collapse = "; ")
+  } else {
+    grants <- NA_character_
+  }
+
+  # Reference count
+  ref_nodes <- xml_find_all(article, ".//ReferenceList/Reference")
+  ref_count <- length(ref_nodes)
+
   # Return as data frame row
-  tibble(
+ tibble(
     pmid = pmid,
     title = title,
     abstract = abstract,
     keywords = keywords,
     authors = authors,
+    affiliations = affiliations,
+    countries = countries,
     journal = journal,
     pub_year = as.integer(pub_year),
     doi = doi,
-    mesh_terms = mesh_terms
+    mesh_terms = mesh_terms,
+    pub_types = pub_types,
+    grants = grants,
+    ref_count = ref_count
   )
 }
 
