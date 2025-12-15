@@ -35,6 +35,8 @@ website:
             href: notebooks/0095_fetch_scopus_data.Rmd
           - text: "Fetch OpenAlex"
             href: notebooks/0097_fetch_openalex_data.Rmd
+          - text: "Fetch Full-Text"
+            href: notebooks/0098_fetch_fulltext.Rmd
       - text: "Data Loading"
         menu:
           - text: "Load Data"
@@ -99,12 +101,13 @@ website:
             - notebooks/0010_test_gemini_api.Rmd
             - notebooks/0020_toy_example_extraction.Rmd
             - notebooks/0030_error_handling_basics.Rmd
-        - section: "Data Fetching (0090-0097)"
+        - section: "Data Fetching (0090-0098)"
           contents:
             - notebooks/0090_fetch_pubmed_data.Rmd
             - notebooks/0092_working_with_lists.Rmd
             - notebooks/0095_fetch_scopus_data.Rmd
             - notebooks/0097_fetch_openalex_data.Rmd
+            - notebooks/0098_fetch_fulltext.Rmd
         - section: "Data Loading (0100-0120)"
           contents:
             - notebooks/0100_load_fusarium_data.Rmd

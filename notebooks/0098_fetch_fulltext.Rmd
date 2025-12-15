@@ -1,0 +1,300 @@
+---
+title: "Fetch Full-Text Articles"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
+```
+
+## Overview
+
+This notebook retrieves full-text PDFs for Open Access articles and extracts text for LLM processing. Uses OpenAlex to identify OA articles with direct PDF links.
+
+**Pipeline position:** After metadata fetching (0090-0097), before data loading (0100)
+
+**Related functions:** `R/fulltext_api.R`, `R/openalex_api.R`
+
+**Data flow:**
+1. Load DOIs from PubMed/Scopus datasets
+2. Query OpenAlex for Open Access status
+3. Download available PDFs
+4. Extract text from PDFs
+5. Save for downstream analysis
+
+## Load Packages and Functions
+
+```{r load-packages}
+library(dplyr)
+library(httr)
+library(jsonlite)
+
+source("../R/fulltext_api.R")
+
+data_dir <- "../data/fusarium"
+fulltext_dir <- "../data/fulltext"
+pdf_dir <- file.path(fulltext_dir, "pdfs")
+
+# Create directories
+if (!dir.exists(fulltext_dir)) dir.create(fulltext_dir, recursive = TRUE)
+if (!dir.exists(pdf_dir)) dir.create(pdf_dir, recursive = TRUE)
+```
+
+## Load Article DOIs
+
+Combine DOIs from all data sources.
+
+```{r load-dois}
+# Load existing datasets
+pubmed_file <- file.path(data_dir, "fusarium_pubmed_full.rds")
+scopus_file <- file.path(data_dir, "fusarium_scopus_full.rds")
+
+dois <- c()
+
+if (file.exists(pubmed_file)) {
+  pubmed <- readRDS(pubmed_file)
+  dois <- c(dois, pubmed$doi[!is.na(pubmed$doi)])
+  cat("PubMed DOIs:", sum(!is.na(pubmed$doi)), "\n")
+}
+
+if (file.exists(scopus_file)) {
+  scopus <- readRDS(scopus_file)
+  dois <- c(dois, scopus$doi[!is.na(scopus$doi)])
+  cat("Scopus DOIs:", sum(!is.na(scopus$doi)), "\n")
+}
+
+dois <- unique(dois)
+cat("\nTotal unique DOIs:", length(dois), "\n")
+```
+
+## Check Open Access Status
+
+Query OpenAlex for each DOI to determine OA availability.
+
+```{r check-oa-status}
+# Check if we have cached OA status
+oa_cache_file <- file.path(data_dir, "our_articles_oa_status.rds")
+
+if (file.exists(oa_cache_file)) {
+  oa_status <- readRDS(oa_cache_file)
+  cat("Loaded cached OA status for", nrow(oa_status), "articles\n")
+
+  # Check for new DOIs
+  new_dois <- setdiff(dois, oa_status$doi)
+  if (length(new_dois) > 0) {
+    cat("Fetching OA status for", length(new_dois), "new DOIs...\n")
+    new_status <- get_oa_status(new_dois, email = "research@example.com")
+    oa_status <- bind_rows(oa_status, new_status)
+    saveRDS(oa_status, oa_cache_file)
+  }
+} else {
+  cat("Fetching OA status for all DOIs (this may take a few minutes)...\n")
+  oa_status <- get_oa_status(dois, email = "research@example.com")
+  saveRDS(oa_status, oa_cache_file)
+}
+```
+
+## OA Status Summary
+
+```{r oa-summary}
+oa_summary <- oa_status %>%
+  summarise(
+    total = n(),
+    found_in_openalex = sum(found),
+    open_access = sum(is_oa),
+    with_pdf_url = sum(!is.na(oa_url)),
+    closed = sum(!is_oa & found)
+  )
+
+tibble(
+  Metric = c("Total DOIs", "Found in OpenAlex", "Open Access", "With PDF URL", "Closed/Paywalled"),
+  Count = c(oa_summary$total, oa_summary$found_in_openalex, oa_summary$open_access,
+            oa_summary$with_pdf_url, oa_summary$closed),
+  Percent = paste0(round(c(100, oa_summary$found_in_openalex, oa_summary$open_access,
+                            oa_summary$with_pdf_url, oa_summary$closed) / oa_summary$total * 100, 1), "%")
+) %>% kable()
+```
+
+## OA Type Breakdown
+
+```{r oa-breakdown}
+oa_status %>%
+  filter(found == TRUE) %>%
+  count(oa_status, name = "count") %>%
+  mutate(percent = paste0(round(count / sum(count) * 100, 1), "%")) %>%
+  arrange(desc(count)) %>%
+  kable()
+```
+
+## Download PDFs
+
+Download Open Access PDFs. This is rate-limited and may take time.
+
+```{r download-pdfs, eval=FALSE}
+# Set eval=TRUE to run downloads
+# WARNING: This downloads files and may take significant time
+
+oa_available <- oa_status %>%
+  filter(is_oa == TRUE, !is.na(oa_url))
+
+cat("Attempting to download", nrow(oa_available), "PDFs...\n")
+
+download_results <- download_oa_pdfs(
+  oa_status,
+  output_dir = pdf_dir,
+  delay = 1  # 1 second between downloads to be polite
+)
+
+saveRDS(download_results, file.path(fulltext_dir, "download_results.rds"))
+
+# Summary
+download_results %>%
+  count(status, name = "count") %>%
+  kable()
+```
+
+## Extract Text from PDFs
+
+Extract text content from downloaded PDFs.
+
+```{r extract-text, eval=FALSE}
+# Set eval=TRUE to run extraction
+
+download_results <- readRDS(file.path(fulltext_dir, "download_results.rds"))
+
+successful_downloads <- download_results %>%
+  filter(downloaded == TRUE)
+
+cat("Extracting text from", nrow(successful_downloads), "PDFs...\n")
+
+extractions <- extract_pdf_text(successful_downloads$filepath)
+
+# Combine with DOI info
+fulltext_df <- successful_downloads %>%
+  left_join(extractions, by = "filepath") %>%
+  mutate(text_clean = sapply(text, clean_pdf_text)) %>%
+  select(doi, filepath, success, pages, text = text_clean)
+
+saveRDS(fulltext_df, file.path(fulltext_dir, "fulltext_extracted.rds"))
+
+# Summary
+tibble(
+  Metric = c("PDFs processed", "Text extracted", "Failed"),
+  Count = c(nrow(fulltext_df), sum(fulltext_df$success, na.rm = TRUE),
+            sum(!fulltext_df$success, na.rm = TRUE))
+) %>% kable()
+```
+
+## Sample Extracted Text
+
+```{r sample-text, eval=FALSE}
+fulltext_df <- readRDS(file.path(fulltext_dir, "fulltext_extracted.rds"))
+
+# Show sample
+sample_article <- fulltext_df %>%
+  filter(success == TRUE) %>%
+  slice(1)
+
+cat("DOI:", sample_article$doi, "\n")
+cat("Pages:", sample_article$pages, "\n")
+cat("\nFirst 1000 characters:\n")
+cat(substr(sample_article$text, 1, 1000), "...\n")
+```
+
+## Quick Test (Single Article)
+
+Test the pipeline with a single article.
+
+```{r quick-test}
+# Test with one known OA article
+test_doi <- oa_status %>%
+  filter(is_oa == TRUE, !is.na(oa_url)) %>%
+  slice(1) %>%
+  pull(doi)
+
+if (length(test_doi) > 0) {
+  cat("Testing with DOI:", test_doi, "\n\n")
+
+  test_url <- oa_status %>% filter(doi == test_doi) %>% pull(oa_url)
+  cat("PDF URL:", test_url, "\n\n")
+
+  # Download
+  test_file <- file.path(pdf_dir, paste0(gsub("[^A-Za-z0-9]", "_", test_doi), ".pdf"))
+
+  if (!file.exists(test_file)) {
+    resp <- GET(test_url, write_disk(test_file, overwrite = TRUE), timeout(60))
+    cat("Download status:", status_code(resp), "\n")
+  } else {
+    cat("File already exists\n")
+  }
+
+  # Extract
+  if (file.exists(test_file) && file.size(test_file) > 1000) {
+    text <- pdftools::pdf_text(test_file)
+    cat("Pages extracted:", length(text), "\n")
+    cat("\nFirst 500 characters of page 1:\n")
+    cat(substr(text[1], 1, 500), "...\n")
+  }
+} else {
+  cat("No OA articles found to test\n")
+}
+```
+
+## Integration with Main Pipeline
+
+The extracted full-texts can be used to enhance LLM extraction.
+
+```{r integration-example, eval=FALSE}
+# Load abstracts and full texts
+fusarium_data <- readRDS(file.path(data_dir, "fusarium_combined.rds"))
+fulltext_df <- readRDS(file.path(fulltext_dir, "fulltext_extracted.rds"))
+
+# Merge
+enhanced_data <- fusarium_data %>%
+  left_join(
+    fulltext_df %>% select(doi, fulltext = text, has_fulltext = success),
+    by = "doi"
+  ) %>%
+  mutate(
+    # Use fulltext if available, otherwise abstract
+    text_for_extraction = ifelse(!is.na(fulltext) & has_fulltext, fulltext, abstract),
+    text_source = ifelse(!is.na(fulltext) & has_fulltext, "fulltext", "abstract")
+  )
+
+table(enhanced_data$text_source)
+```
+
+## Coverage Summary
+
+```{r coverage-summary}
+# Final coverage stats
+tibble(
+  Source = c("Abstract only (PubMed)", "Abstract only (Scopus)", "Full-text (OA)", "No text available"),
+  Description = c(
+    "Complete abstracts from PubMed API",
+    "Limited - Scopus STANDARD view doesn't include abstracts",
+    "~58% of articles are Open Access with downloadable PDFs",
+    "Paywalled without abstract"
+  )
+) %>% kable()
+```
+
+## Next Steps
+
+After fetching full-texts:
+1. Run `0100_load_fusarium_data.Rmd` to load combined data
+2. Full-texts provide richer context for LLM extraction
+3. Consider chunking long texts for token limits
+
+## Troubleshooting
+
+**Common issues:**
+
+1. **Download fails (403/404):** Publisher may block automated downloads. Some "OA" articles require human verification.
+
+2. **PDF extraction fails:** Scanned PDFs without OCR layer. Would need OCR processing (not implemented).
+
+3. **Rate limiting:** OpenAlex allows 100k requests/day with email. PDF downloads should use 1-2 second delays.
+
+4. **Large files:** Some PDFs are very large (>50MB). Consider setting file size limits.
