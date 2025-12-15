@@ -38,7 +38,7 @@ tmp/
 .DS_Store
 Thumbs.db
 
-# Local development scratchpad (NOT tracked - per global CLAUDE.md)
+# Local development scratchpad (NOT tracked)
 dev/
 
 # Notebook rendered output
