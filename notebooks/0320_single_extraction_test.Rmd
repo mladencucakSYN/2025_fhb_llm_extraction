@@ -36,7 +36,7 @@ cat("Title:", test_study$title, "\n\n")
 result <- extract_fusarium_gemini(
   abstract = test_study$abstract_clean,
   title = test_study$title,
-  keywords = test_study$keywords_clean
+  keywords = safe_text(test_study$keywords_clean)
 )
 
 cat("✓ Extraction complete\n\n")

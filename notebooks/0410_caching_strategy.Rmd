@@ -30,12 +30,13 @@ Demonstrate saving and loading cached extractions.
 
 ```{r test-cache}
 cat("=== Testing Cache Functions ===\n\n")
+unlink(cache_dir, recursive = TRUE)
 
 # Create a test extraction result
 test_result <- list(
   id = "TEST_001",
-  fusarium_species = c("F. graminearum"),
-  crop = c("wheat"),
+  fusarium_species = safe_text(c("F. graminearum")),
+  crop = safe_text(c("wheat")),
   summary = "Test extraction result"
 )
 
@@ -79,7 +80,7 @@ for (i in 1:5) {
       extract_fusarium_gemini(
         abstract = study$abstract_clean,
         title = study$title,
-        keywords = study$keywords_clean
+        keywords = safe_text(study$keywords_clean)
       )
     }, max_attempts = 3, base_delay = 2)
   }, error = function(e) {

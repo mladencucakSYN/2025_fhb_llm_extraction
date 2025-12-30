@@ -90,9 +90,9 @@ Sys.sleep(5)  # Give time to cancel if started accidentally
 extract_one_study <- function(study_row) {
   result <- retry_with_backoff({
     extract_fusarium_gemini(
-      abstract = study_row$abstract_clean,
-      title = study_row$title,
-      keywords = study_row$keywords_clean
+      abstract = safe_text(study_row$abstract_clean),
+      title = safe_text(study_row$title),
+      keywords = safe_text(study_row$keywords_clean)
     )
   }, max_attempts = CONFIG$max_attempts, base_delay = 2)
 
