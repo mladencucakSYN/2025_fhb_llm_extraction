@@ -50,7 +50,8 @@ reconstruct_abstract <- function(inverted_index) {
 #' @export
 openalex_fetch_doi <- function(doi, email = "research@university.edu") {
 
-  url <- paste0("https://api.openalex.org/works/doi:", doi)
+  # OpenAlex requires full DOI URL format
+  url <- paste0("https://api.openalex.org/works/https://doi.org/", doi)
 
   response <- GET(
     url,
@@ -61,24 +62,74 @@ openalex_fetch_doi <- function(doi, email = "research@university.edu") {
     return(NULL)
   }
 
-  data <- fromJSON(content(response, as = "text", encoding = "UTF-8"))
+  # Use simplifyVector=FALSE to get proper nested lists
+  data <- fromJSON(content(response, as = "text", encoding = "UTF-8"), simplifyVector = FALSE)
+
+  # Safely extract nested fields
+  journal_name <- tryCatch({
+    data$primary_location$source$display_name
+  }, error = function(e) NA_character_)
+
+  is_oa <- tryCatch({
+    data$open_access$is_oa
+  }, error = function(e) NA)
+
+  # Extract authors safely
+  authors <- tryCatch({
+    if (!is.null(data$authorships) && length(data$authorships) > 0) {
+      author_names <- sapply(data$authorships, function(x) {
+        if (!is.null(x$author$display_name)) x$author$display_name else NA_character_
+      })
+      paste(author_names[!is.na(author_names)], collapse = "; ")
+    } else {
+      NA_character_
+    }
+  }, error = function(e) NA_character_)
+
+  # Extract institutions safely
+  institutions <- tryCatch({
+    if (!is.null(data$authorships) && length(data$authorships) > 0) {
+      inst_names <- unlist(lapply(data$authorships, function(x) {
+        if (!is.null(x$institutions) && length(x$institutions) > 0) {
+          sapply(x$institutions, function(i) i$display_name)
+        } else {
+          NULL
+        }
+      }))
+      if (length(inst_names) > 0) paste(unique(inst_names), collapse = "; ") else NA_character_
+    } else {
+      NA_character_
+    }
+  }, error = function(e) NA_character_)
+
+  # Extract countries safely
+  countries <- tryCatch({
+    if (!is.null(data$authorships) && length(data$authorships) > 0) {
+      country_codes <- unlist(lapply(data$authorships, function(x) {
+        if (!is.null(x$institutions) && length(x$institutions) > 0) {
+          sapply(x$institutions, function(i) i$country_code)
+        } else {
+          NULL
+        }
+      }))
+      if (length(country_codes) > 0) paste(unique(country_codes), collapse = "; ") else NA_character_
+    } else {
+      NA_character_
+    }
+  }, error = function(e) NA_character_)
 
   list(
-    openalex_id = data$id,
+    openalex_id = data$id %||% NA_character_,
     doi = doi,
-    title = data$title,
+    title = data$title %||% NA_character_,
     abstract = reconstruct_abstract(data$abstract_inverted_index),
-    pub_year = data$publication_year,
-    journal = data$primary_location$source$display_name,
-    cited_by = data$cited_by_count,
-    is_open_access = data$open_access$is_oa,
-    authors = paste(sapply(data$authorships, function(x) x$author$display_name), collapse = "; "),
-    institutions = paste(unique(unlist(sapply(data$authorships, function(x) {
-      sapply(x$institutions, function(i) i$display_name)
-    }))), collapse = "; "),
-    countries = paste(unique(unlist(sapply(data$authorships, function(x) {
-      sapply(x$institutions, function(i) i$country_code)
-    }))), collapse = "; ")
+    pub_year = data$publication_year %||% NA_integer_,
+    journal = journal_name,
+    cited_by = data$cited_by_count %||% NA_integer_,
+    is_open_access = is_oa,
+    authors = authors,
+    institutions = institutions,
+    countries = countries
   )
 }
 
