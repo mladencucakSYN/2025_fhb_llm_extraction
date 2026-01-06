@@ -120,21 +120,32 @@ openalex_search <- function(query,
       break
     }
 
-    data <- fromJSON(content(response, as = "text", encoding = "UTF-8"))
+    # Use simplifyVector=FALSE to get list of lists (not data frame)
+    data <- fromJSON(content(response, as = "text", encoding = "UTF-8"), simplifyVector = FALSE)
 
     if (length(data$results) == 0) break
 
-    # Parse results
+    # Parse results - iterate over list elements
     batch <- map_dfr(data$results, function(work) {
+      # Safely extract journal name from nested structure
+      journal_name <- tryCatch({
+        work$primary_location$source$display_name
+      }, error = function(e) NA_character_)
+
+      # Safely extract open access status
+      is_oa <- tryCatch({
+        work$open_access$is_oa
+      }, error = function(e) NA)
+
       tibble(
-        openalex_id = work$id,
-        doi = work$doi,
-        title = work$title,
+        openalex_id = work$id %||% NA_character_,
+        doi = work$doi %||% NA_character_,
+        title = work$title %||% NA_character_,
         abstract = reconstruct_abstract(work$abstract_inverted_index),
-        pub_year = work$publication_year,
-        journal = work$primary_location$source$display_name,
-        cited_by = work$cited_by_count,
-        is_open_access = work$open_access$is_oa
+        pub_year = work$publication_year %||% NA_integer_,
+        journal = journal_name,
+        cited_by = work$cited_by_count %||% NA_integer_,
+        is_open_access = is_oa
       )
     })
 

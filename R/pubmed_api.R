@@ -16,11 +16,15 @@ library(purrr)
 #' Uses NCBI E-utilities ESearch to find PMIDs matching search criteria.
 #'
 #' @param query Character string. PubMed search query (e.g., "fusarium AND wheat")
-#' @param retmax Integer. Maximum number of PMIDs to return (default: 1000)
+#' @param retmax Integer. Maximum number of PMIDs to return (default: 1000).
+#'        Set to NULL to return all results (up to API limit).
+#' @param retstart Integer. Starting position for results (default: 0).
+#'        Useful for pagination through large result sets.
 #' @param api_key Character string. PubMed API key (increases rate limit to 10 req/sec)
 #' @param db Character string. NCBI database to search (default: "pubmed")
 #'
-#' @return Character vector of PMIDs
+#' @return Character vector of PMIDs with attributes: count (total matches),
+#'         query_key, webenv (for batch fetching)
 #'
 #' @export
 #' @examples
@@ -28,9 +32,14 @@ library(purrr)
 #' # Search for Fusarium articles
 #' pmids <- pubmed_search("fusarium AND wheat", retmax = 100)
 #' length(pmids)
+#'
+#' # Paginate through results
+#' batch1 <- pubmed_search("fusarium", retmax = 100, retstart = 0)
+#' batch2 <- pubmed_search("fusarium", retmax = 100, retstart = 100)
 #' }
 pubmed_search <- function(query,
                           retmax = 1000,
+                          retstart = 0,
                           api_key = Sys.getenv("PUB_MED_API_KEY"),
                           db = "pubmed") {
 
@@ -41,6 +50,7 @@ pubmed_search <- function(query,
     db = db,
     term = query,
     retmax = retmax,
+    retstart = retstart,
     retmode = "xml",
     usehistory = "y"  # Use history server for large queries
   )
