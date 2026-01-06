@@ -1,16 +1,17 @@
 # LLM-Based Text Extraction for Fusarium Research
 
-This R project demonstrates LLM-assisted extraction of structured information from scientific literature, specifically focused on Fusarium head blight research under climate change conditions. The project combines educational toy examples with a real research application.
+This R project implements LLM-assisted extraction of structured experimental data from Fusarium head blight (FHB) literature. The goal is to systematically extract temperature/moisture regimes, experimental settings (field vs lab vs growth chamber), pathogen species/chemotypes, crop varieties, and outcomes to enable meta-analysis of lab-to-field translation and environment × crop × pathogen interactions.
 
 ## Project Status
 
-**Last Updated**: 2025-11-03
+**Last Updated**: 2026-01-06
 
-This project has been restructured to provide:
-- **Educational progression**: Simple examples → Complex research application
-- **Production-ready code**: Error handling, retry logic, batch processing, caching
-- **Complete workflow**: Data loading → Topic modeling → Extraction → Analysis
-- **Research focus**: Fusarium species, crops, abiotic factors, and climate interactions
+**Current capabilities**:
+- **Multi-source literature search**: PubMed, Scopus, and OpenAlex APIs with pagination and deduplication
+- **Full-text retrieval**: Open Access PDF download pipeline with validation
+- **LLM extraction**: Gemini-powered structured data extraction with retry logic and caching
+- **Topic modeling**: LDA-based filtering to ecophysiology-relevant studies
+- **Documentation**: Quarto website with research framework and technical guides
 
 ## Quick Start
 
@@ -55,14 +56,19 @@ SCOPUS_API_KEY=your_scopus_key_here      # Required for Scopus fetching
 2025_fhb_llm_extraction/
 ├── R/                              # Production R functions
 │   ├── utils.R                     # Config, file I/O, text cleaning
-│   ├── pubmed_api.R                # PubMed E-utilities API functions
+│   ├── pubmed_api.R                # PubMed E-utilities API (search, fetch, pagination)
 │   ├── scopus_api.R                # Scopus Search API functions
+│   ├── openalex_api.R              # OpenAlex API (abstracts, OA status, metadata)
+│   ├── fulltext_api.R              # PDF download and text extraction pipeline
 │   ├── retry_logic.R               # Exponential backoff & error handling
 │   ├── batch_processor.R           # Rate-limited batch processing
 │   ├── cache_manager.R             # Save/load extraction results
 │   ├── gemini_extraction.R         # Gemini API extraction functions
 │   ├── extractors.R                # Legacy extraction wrappers
 │   └── evaluation.R                # Metrics and visualization
+│
+├── scripts/                        # Standalone utility scripts
+│   └── download_oa_fulltext.R      # Bulk Open Access PDF downloader
 │
 ├── notebooks/                      # Numbered analysis notebooks
 │   ├── Section 0: Setup (0000-0030)
@@ -72,10 +78,12 @@ SCOPUS_API_KEY=your_scopus_key_here      # Required for Scopus fetching
 │   │   ├── 0020_toy_example_extraction.Rmd
 │   │   └── 0030_error_handling_basics.Rmd
 │   │
-│   ├── Data Fetching (0090-0095) [Optional]
+│   ├── Data Fetching (0090-0098)
 │   │   ├── 0090_fetch_pubmed_data.Rmd
-│   │   ├── 0092_working_with_lists.Rmd    ⭐ List tutorial
-│   │   └── 0095_fetch_scopus_data.Rmd
+│   │   ├── 0092_working_with_lists.Rmd    # List tutorial
+│   │   ├── 0095_fetch_scopus_data.Rmd
+│   │   ├── 0097_fetch_openalex_data.Rmd   # OpenAlex metadata & abstracts
+│   │   └── 0098_fetch_fulltext.Rmd        # Full-text PDF retrieval
 │   │
 │   ├── Section 1: Data Loading (0100-0120)
 │   │   ├── 0100_load_fusarium_data.Rmd
@@ -106,14 +114,17 @@ SCOPUS_API_KEY=your_scopus_key_here      # Required for Scopus fetching
 │       ├── 0520_aggregate_results.Rmd
 │       └── 0530_fusarium_analysis.Rmd
 │
+├── docs/                           # Documentation (Quarto site)
+│   └── site/                       # Generated documentation website
+│
 ├── data/                           # Data files (not in git)
 │   ├── fusarium/                   # Research dataset
+│   ├── fulltext/                   # Downloaded PDFs and extraction logs
 │   ├── cache/                      # Cached extraction results
 │   └── logs/                       # Processing logs
 │
 ├── dev/                            # Development & planning
-│   ├── implementation_plan.md      # Detailed restructuring plan
-│   └── archive/                    # Old notebooks (superseded)
+│   └── doc/main/                   # System documentation
 │
 ├── results/                        # Output files
 ├── tests/                          # Unit tests (testthat)
@@ -134,36 +145,42 @@ Learn basic concepts with toy examples before tackling real research data.
 - **0020**: Compare rule-based vs. LLM extraction on simple examples
 - **0030**: Implement retry logic for rate limits
 
-### Data Fetching: Literature Search (Optional, 10-20 min)
-**Note**: Skip this section if you already have literature data in CSV format.
+### Data Fetching: Literature Search (0090-0098)
 
-Programmatically fetch scientific literature from databases:
+Programmatically fetch scientific literature from multiple databases:
+
 - **0090**: Fetch from PubMed (NCBI E-utilities API)
-  - Search 1,572 Fusarium articles in PubMed
-  - Free API (key optional, increases rate limit)
+  - Search Fusarium articles with pagination support (`retstart` parameter)
+  - Free API (key optional, increases rate limit from 3 to 10 req/sec)
   - Fetch metadata: title, abstract, keywords, MeSH terms
 
-- **0092**: **Working with Lists and API Responses** ⭐ **Start here if new to R lists**
-  - Learn how to access list elements with `$`, `[[]]`, and `[]`
-  - Understand PubMed and Scopus response structures
-  - Practice extracting fields from API data
-  - Common mistakes and solutions
-  - Includes practice exercises
+- **0092**: Working with Lists and API Responses
+  - Learn list access patterns (`$`, `[[]]`, `[]`)
+  - Understand API response structures
 
 - **0095**: Fetch from Scopus (Elsevier API)
-  - Broader disciplinary coverage
-  - Includes conference proceedings
+  - Broader disciplinary coverage, conference proceedings
   - Citation counts and affiliation data
   - Requires institutional API key
 
-**Workflow**:
-1. Run 0090 to fetch PubMed data (saves to `data/fusarium/fusarium_pubmed_full.csv`)
-2. **Run 0092 to learn list operations** (if unfamiliar with R lists)
-3. Run 0095 to fetch Scopus data (saves to `data/fusarium/fusarium_scopus_full.csv`)
-4. Merge both sources and deduplicate (code provided in 0095)
-5. Use merged data in Section 1 below
+- **0097**: Fetch from OpenAlex (free, open alternative)
+  - No API key required (email for polite pool recommended)
+  - Reconstructs abstracts from inverted index format
+  - Provides Open Access status and PDF URLs
+  - Useful for enriching PubMed/Scopus data with missing abstracts
 
-**Quick practice script**: Run `Rscript dev/example_working_with_api_lists.R` for a quick demonstration of list operations with real API data.
+- **0098**: Full-text PDF Retrieval
+  - Query OpenAlex for OA status of article DOIs
+  - Download Open Access PDFs with validation
+  - Extract text from PDFs using `pdftools`
+  - Track download status and failures
+
+**Workflow**:
+1. Run 0090 to fetch PubMed data
+2. Run 0095 to fetch Scopus data (requires API key)
+3. Merge and deduplicate by DOI
+4. Run 0097 to enrich with OpenAlex metadata (abstracts, OA status)
+5. Run 0098 to download available full-text PDFs
 
 ### Section 1: Load Research Data (20 min)
 Load and prepare the Fusarium literature dataset.
@@ -201,49 +218,103 @@ Assess quality and perform research analysis.
 
 ## Key Features
 
-### 1. Error Handling
-All extraction code includes:
+### 1. Multi-Source Literature Search
+```r
+source("R/pubmed_api.R")
+source("R/scopus_api.R")
+source("R/openalex_api.R")
+
+# Search PubMed with pagination
+results <- pubmed_search("fusarium AND wheat", retmax = 1000, retstart = 0)
+
+# Fetch metadata for DOIs from OpenAlex
+abstracts <- openalex_get_abstracts(dois, email = "your@email.edu")
+```
+
+### 2. Full-Text Retrieval Pipeline
+```r
+source("R/fulltext_api.R")
+
+# Check Open Access status via OpenAlex
+oa_status <- get_oa_status(dois, email = "your@email.edu")
+
+# Download available PDFs (with validation)
+downloads <- download_oa_pdfs(oa_status, output_dir = "data/fulltext/pdfs")
+
+# Extract text from PDFs
+texts <- extract_pdf_text(pdf_paths)
+```
+
+**Limitations**: Publisher restrictions limit programmatic PDF access. Testing shows ~20-30% success rate:
+- Nature/Springer: Generally accessible
+- Elsevier: Returns HTML redirects (blocked)
+- MDPI: Returns 403 Forbidden
+- Many publishers require institutional proxy or manual download
+
+For comprehensive full-text, consider: (1) institutional repository access, (2) Unpaywall browser extension, (3) contacting authors directly.
+
+### 3. Error Handling & Retry Logic
 - Exponential backoff retry (handles HTTP 429 rate limits)
 - Graceful error catching (continues on single failures)
 - Error logging for debugging
 
-### 2. Caching
+### 4. Caching
 - Automatic caching of extraction results
 - Resume from failures without re-processing
 - Saves API costs and time
 
-### 3. Batch Processing
+### 5. Batch Processing
 - Rate-limited processing (configurable delays)
 - Progress tracking
 - Checkpointing every N documents
 
-### 4. Production-Ready Functions
+### 6. Production-Ready Functions
 All reusable code is in `R/` directory:
 ```r
-# Load functions in any notebook:
-source("../R/pubmed_api.R")        # Fetch from PubMed
-source("../R/scopus_api.R")        # Fetch from Scopus
-source("../R/gemini_extraction.R") # LLM extraction
-source("../R/retry_logic.R")       # Error handling
-source("../R/batch_processor.R")   # Rate-limited processing
-source("../R/cache_manager.R")     # Result caching
+source("R/pubmed_api.R")        # PubMed E-utilities
+source("R/scopus_api.R")        # Scopus Search API
+source("R/openalex_api.R")      # OpenAlex (abstracts, OA status)
+source("R/fulltext_api.R")      # PDF download & text extraction
+source("R/gemini_extraction.R") # LLM extraction
+source("R/retry_logic.R")       # Error handling
+source("R/batch_processor.R")   # Rate-limited processing
+source("R/cache_manager.R")     # Result caching
 ```
+
+## Research Goals
+
+The project aims to extract experimental data enabling:
+- **Lab-to-field translation analysis**: Compare effect sizes between growth chamber, greenhouse, and field studies
+- **Environment × crop × pathogen interactions**: Map which combinations are well-studied vs under-studied
+- **Climate risk assessment**: Identify temperature/moisture thresholds for disease development
+
+Full-text extraction is important because detailed experimental parameters (temperature regimes, inoculation methods, cultivar names, chemotype identification) are typically in Methods sections, not abstracts.
 
 ## Extraction Schema
 
 The project extracts 9 fields from each study:
 
-1. **fusarium_species** (array): F. graminearum, F. culmorum, etc.
-2. **crop** (array): wheat, barley, maize, oats
-3. **abiotic_factors** (array): temperature, moisture, humidity, drought
-4. **mycotoxins** (array): DON, zearalenone, nivalenol
-5. **observed_effects** (array): yield loss, disease severity, toxin production
-6. **agronomic_practices** (array): fungicide, rotation, resistant cultivars
-7. **modeling** (boolean): whether study uses predictive models
-8. **study_type** (array): field, greenhouse, laboratory, modeling
-9. **summary** (string): 1-2 sentence finding summary
+| Field | Type | Purpose |
+|-------|------|---------|
+| **fusarium_species** | array | F. graminearum, F. culmorum, chemotypes (3ADON, 15ADON, NIV) |
+| **crop** | array | wheat, barley, maize, oats, specific cultivars |
+| **abiotic_factors** | array | temperature, moisture, humidity regimes |
+| **mycotoxins** | array | DON, zearalenone, nivalenol production |
+| **observed_effects** | array | yield loss, disease severity, toxin accumulation |
+| **agronomic_practices** | array | fungicide, rotation, resistant cultivars |
+| **modeling** | boolean | whether study uses predictive models |
+| **study_type** | array | field, greenhouse, growth chamber, modeling |
+| **summary** | string | 1-2 sentence finding summary |
 
 ## API Usage & Costs
+
+### Literature APIs
+
+| API | Key Required | Rate Limit | Notes |
+|-----|--------------|------------|-------|
+| **PubMed** | Optional | 3/sec (10 with key) | Free NCBI E-utilities |
+| **Scopus** | Yes (institutional) | 2/sec | Elsevier institutional access |
+| **OpenAlex** | No | 10/sec (polite pool) | Free, open. Provide email for faster limits |
 
 ### Gemini API (Free Tier)
 - **Rate limit**: ~60 requests/min
@@ -292,66 +363,18 @@ renv::restore()
 - Check that data files exist before running extraction notebooks
 - Source required functions at notebook start
 
-## For Students: What to Implement
+## Next Steps
 
-The scaffold provides a complete working example with Gemini. Your tasks:
-
-1. **✅ Completed**: Full Gemini extraction pipeline
-2. **Optional Extensions**:
-   - Add OpenAI GPT extraction (`extract_with_openai()` in `R/extractors.R`)
-   - Add Anthropic Claude extraction (`extract_with_anthropic()`)
-   - Compare multiple LLM providers
-   - Add more sophisticated evaluation metrics
-   - Implement few-shot prompting examples
-
-3. **Research Tasks**:
-   - Run manual validation (notebook 0510) on 20-50 documents
-   - Calculate precision/recall metrics
-   - Refine extraction prompts based on errors
-   - Perform full extraction on your dataset
-   - Write up findings from notebook 0530
-
-## Project History
-
-- **Original**: Simple scaffold with toy examples, TODOs for students
-- **2025-11-03 Restructuring**:
-  - Added 30+ notebooks with complete workflow
-  - Integrated real Fusarium research application
-  - Added production-ready error handling and batch processing
-  - Implemented LDA topic modeling
-  - Created comprehensive analysis pipeline
-  - Added detailed documentation following best practices
-
-See `dev/implementation_plan.md` for full restructuring documentation.
+Current research tasks:
+1. **Manual validation**: Validate extraction on 20-50 documents (notebook 0510)
+2. **Expand full-text**: Explore institutional access or manual download for key papers
+3. **Refine prompts**: Improve extraction of specific experimental parameters
+4. **Run full extraction**: Process complete dataset with caching
+5. **Analysis**: Compare field vs lab studies, identify knowledge gaps
 
 ## Documentation
 
-- **Implementation Plan**: `dev/implementation_plan.md` - Detailed restructuring notes
-- **Notebook Standards**: Follow patterns in `notebooks/` (describe → execute → describe outcome)
+- **Research Framework**: `docs/research_framework.md` - Research questions and methodology guide
+- **Technical Overview**: `dev/doc/main/technical_overview.md` - Architecture and file connections
+- **Quarto Site**: Run `quarto preview docs/` to view documentation website
 - **Function Documentation**: Roxygen2 headers in all `R/` files
-- **Archive**: `dev/archive/` - Old notebooks preserved for reference
-
-## Getting Help
-
-1. Check the specific notebook for inline documentation
-2. Review `dev/implementation_plan.md` for design decisions
-3. Look at function documentation in `R/` files
-4. Check archived notebooks in `dev/archive/` for alternative approaches
-
-## Citation
-
-If you use this project structure or code, please cite:
-```
-LLM-Based Text Extraction for Fusarium Research (2025)
-https://github.com/your-org/2025_fhb_llm_extraction
-```
-
-## License
-
-[Your license here]
-
-## Contributors
-
-- Instructor: [Your name]
-- Student: [Student name]
-- Claude Code: Restructuring and documentation (2025-11-03)
