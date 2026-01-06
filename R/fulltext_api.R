@@ -110,12 +110,20 @@ download_oa_pdfs <- function(oa_df, output_dir = "data/fulltext/pdfs", delay = 1
     if (is.null(resp)) {
       results[[doi]] <- list(doi = doi, downloaded = FALSE, filepath = NA, status = "error")
     } else if (status_code(resp) == 200) {
-      # Verify it's actually a PDF
+      # Verify it's actually a PDF (check magic bytes)
+      is_valid_pdf <- FALSE
       if (file.exists(filepath) && file.size(filepath) > 1000) {
+        # Check if file starts with %PDF
+        first_bytes <- readBin(filepath, "raw", n = 5)
+        is_valid_pdf <- identical(first_bytes, charToRaw("%PDF-"))
+      }
+
+      if (is_valid_pdf) {
         results[[doi]] <- list(doi = doi, downloaded = TRUE, filepath = filepath, status = "success")
       } else {
-        file.remove(filepath)
-        results[[doi]] <- list(doi = doi, downloaded = FALSE, filepath = NA, status = "invalid_file")
+        # File is HTML redirect or invalid - remove it
+        if (file.exists(filepath)) file.remove(filepath)
+        results[[doi]] <- list(doi = doi, downloaded = FALSE, filepath = NA, status = "html_redirect")
       }
     } else {
       if (file.exists(filepath)) file.remove(filepath)
