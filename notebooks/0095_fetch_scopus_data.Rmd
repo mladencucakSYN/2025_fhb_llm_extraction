@@ -1,6 +1,8 @@
 ---
 title: "Fetch Literature from Scopus"
 output: html_document
+execute:
+  eval: false
 ---
 
 ```{r setup, include=FALSE}
@@ -137,22 +139,40 @@ if (exists("test_result") && nrow(test_result$results) > 0) {
 
 Build a comprehensive Scopus search query for Fusarium ecophysiology research.
 
+### Query Syntax Reference
+
+Scopus query syntax:
+- `""` - phrase matching
+- `*` - wildcard for word endings (model* matches model, modeling, models)
+- `TITLE-ABS-KEY()` - search title, abstract, and keywords
+- Boolean: AND (both required), OR (either), NOT (exclude)
+- `()` - grouping terms
+- `DOCTYPE(ar)` - article type filter
+
 ```{r build-query}
-# Query components (same logic as PubMed, different syntax)
-fusarium_terms <- "(fusarium OR \"fusarium graminearum\" OR \"fusarium head blight\" OR FHB)"
-crop_terms <- "(wheat OR barley OR maize OR corn OR cereal OR grain)"
-abiotic_terms <- "(temperature OR water OR moisture OR humidity OR climate OR environment OR abiotic OR stress)"
+# Comprehensive query with specific Fusarium species and climate factors
+# Structure: Disease → Species → Hosts → Environment → Outcomes → DocType
 
-# Combine and wrap in Scopus TITLE-ABS-KEY syntax
-fusarium_query <- paste0(
-  "TITLE-ABS-KEY(",
-  fusarium_terms, " AND ", crop_terms, " AND ", abiotic_terms,
-  ")"
-)
+fusarium_query <- '(TITLE-ABS-KEY("fusarium head blight") OR TITLE-ABS-KEY(FHB) OR TITLE-ABS-KEY("wheat scab") OR TITLE-ABS-KEY("ear blight"))
+AND
+(TITLE-ABS-KEY(Fusarium) OR TITLE-ABS-KEY("Fusarium spp") OR TITLE-ABS-KEY("Fusarium graminearum") OR TITLE-ABS-KEY("Fusarium culmorum") OR TITLE-ABS-KEY("Fusarium poae") OR TITLE-ABS-KEY("Fusarium avenaceum") OR TITLE-ABS-KEY("Fusarium temperatum") OR TITLE-ABS-KEY("Fusarium equiseti") OR TITLE-ABS-KEY("Fusarium langsethiae") OR TITLE-ABS-KEY("Fusarium sporotrichioides") OR TITLE-ABS-KEY("Fusarium tricinctum") OR TITLE-ABS-KEY("Fusarium proliferatum"))
+AND
+(TITLE-ABS-KEY(cereal*) OR TITLE-ABS-KEY(wheat) OR TITLE-ABS-KEY(barley) OR TITLE-ABS-KEY(oat*) OR TITLE-ABS-KEY(rye) OR TITLE-ABS-KEY(maize) OR TITLE-ABS-KEY(corn) OR TITLE-ABS-KEY(rice) OR TITLE-ABS-KEY(sorghum))
+AND
+(TITLE-ABS-KEY(climate) OR TITLE-ABS-KEY("climate change") OR TITLE-ABS-KEY(temperature) OR TITLE-ABS-KEY("heat stress") OR TITLE-ABS-KEY(humidity) OR TITLE-ABS-KEY("relative humidity") OR TITLE-ABS-KEY(rainfall) OR TITLE-ABS-KEY(precipitation) OR TITLE-ABS-KEY(drought) OR TITLE-ABS-KEY(moisture) OR TITLE-ABS-KEY("water stress") OR TITLE-ABS-KEY("water activity") OR TITLE-ABS-KEY(CO2) OR TITLE-ABS-KEY("solar radiation") OR TITLE-ABS-KEY(photoperiod) OR TITLE-ABS-KEY(salinity) OR TITLE-ABS-KEY(microclimate) OR TITLE-ABS-KEY(pH) OR TITLE-ABS-KEY("soil nutrients") OR TITLE-ABS-KEY("abiotic stress"))
+AND
+(TITLE-ABS-KEY(model*) OR TITLE-ABS-KEY(predict*) OR TITLE-ABS-KEY(forecast*) OR TITLE-ABS-KEY("risk model") OR TITLE-ABS-KEY("process-based") OR TITLE-ABS-KEY(mechanistic) OR TITLE-ABS-KEY(ecology) OR TITLE-ABS-KEY(epidemiology) OR TITLE-ABS-KEY(virulence) OR TITLE-ABS-KEY(pathogenicity) OR TITLE-ABS-KEY(infection) OR TITLE-ABS-KEY(sporulation) OR TITLE-ABS-KEY(colonization) OR TITLE-ABS-KEY("mycotoxin production") OR TITLE-ABS-KEY(mycotoxin*) OR TITLE-ABS-KEY(deoxynivalenol) OR TITLE-ABS-KEY(DON) OR TITLE-ABS-KEY(nivalenol) OR TITLE-ABS-KEY(zearalenone) OR TITLE-ABS-KEY(enniatin*) OR TITLE-ABS-KEY(beauvericin) OR TITLE-ABS-KEY("T-2") OR TITLE-ABS-KEY("HT-2") OR TITLE-ABS-KEY("emerging mycotoxin"))
+AND DOCTYPE(ar)'
 
-cat("Fusarium Ecophysiology Query (Scopus syntax):\n")
+cat("Fusarium Ecophysiology Query (Scopus):\n")
 cat(rep("=", 70), "\n", sep = "")
-cat(strwrap(fusarium_query, width = 70), sep = "\n")
+cat("Query includes:\n")
+cat("  - Disease terms: FHB, wheat scab, ear blight\n")
+cat("  - 12 Fusarium species\n")
+cat("  - 9 cereal crops\n")
+cat("  - 20+ abiotic/climate factors\n")
+cat("  - Outcomes: modeling, infection, mycotoxins (incl. emerging)\n")
+cat("  - Document type: Journal articles only\n")
 cat(rep("=", 70), "\n", sep = "")
 ```
 
@@ -376,14 +396,16 @@ if (file.exists(pubmed_file) && file.exists(scopus_file)) {
   cat("  After deduplication:", nrow(combined_dedupe), "articles\n")
   cat("  Removed duplicates:", nrow(combined) - nrow(combined_dedupe), "\n")
 
-  # Save merged dataset
-  merged_file <- file.path(data_dir, "fusarium_combined_pubmed_scopus.csv")
+  # Save merged dataset (fusarium_studies.csv for 0100 compatibility)
+  merged_file <- file.path(data_dir, "fusarium_studies.csv")
   write_csv(combined_dedupe, merged_file)
   cat("\nSaved merged data to:", merged_file, "\n")
 
-  rds_file <- file.path(data_dir, "fusarium_combined_pubmed_scopus.rds")
+  rds_file <- file.path(data_dir, "fusarium_studies.rds")
   saveRDS(combined_dedupe, rds_file)
   cat("Saved as RDS:", rds_file, "\n")
+
+  cat("\nNote: This file is ready for 0100_load_fusarium_data.Rmd\n")
 
 } else {
   cat("Both PubMed and Scopus full datasets needed for merging.\n")

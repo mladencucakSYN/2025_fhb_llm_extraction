@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Production Batch Processing
+## Overview
 
 This notebook demonstrates batch processing for extracting data from large numbers of studies with rate limiting and progress tracking.
+
+## Load Packages and Data
 
 ```{r load-all}
 library(dplyr)
@@ -19,36 +22,43 @@ source("../R/retry_logic.R")
 source("../R/batch_processor.R")
 source("../R/utils.R")
 
+# Model configuration - change here to switch models
+# Options: "gemini-2.5-flash-lite" (fast), "gemini-2.5-pro" (better quality)
+GEMINI_MODEL <- "gemini-2.5-flash-lite"
+
 data_dir <- "../data/fusarium"
 ```
 
-**Result**: Batch processing tools loaded.
-
-## Load Test Sample
-
 ```{r load-sample}
-# Start with 50-study sample
 sample_50 <- readRDS(file.path(data_dir, "sample_50_studies.rds"))
 
-cat("✓ Loaded", nrow(sample_50), "studies for batch processing\n")
+tibble(
+  Dataset = "50-study sample",
+  Studies = nrow(sample_50)
+) %>% kable()
 ```
 
-**Result**: Test sample loaded for batch extraction.
-
-## Define Extraction Function for Batch
+## Define Extraction Function
 
 ```{r define-extractor}
 extract_one_study <- function(study_row) {
   result <- tryCatch({
     retry_with_backoff({
       extract_fusarium_gemini(
+<<<<<<< HEAD
         abstract = safe_text(study_row$abstract_clean),
         title = safe_text(study_row$title),
         keywords = safe_text(study_row$keywords_clean)
+=======
+        abstract = study_row$abstract_clean,
+        title = study_row$title,
+        keywords = study_row$keywords_clean,
+        model = GEMINI_MODEL
+>>>>>>> origin/main
       )
     }, max_attempts = 3, base_delay = 2)
   }, error = function(e) {
-    return(NULL)
+    NULL
   })
 
   if (!is.null(result)) {
@@ -59,92 +69,83 @@ extract_one_study <- function(study_row) {
     NULL
   }
 }
-
-cat("✓ Extraction function defined\n")
 ```
-
-**Result**: Single-study extraction function ready for batch processing.
 
 ## Run Batch Processing
 
-Process studies in batches with rate limiting to avoid API limits.
+Process studies in batches with rate limiting.
 
 ```{r run-batch}
-cat("\n=== Starting Batch Processing ===\n\n")
-
-# Process first 10 studies as demonstration
 demo_sample <- sample_50[1:10, ]
 
 results_df <- process_batch(
   docs = demo_sample,
   extract_fn = extract_one_study,
   id_col = "id",
-  batch_size = 5,      # Process 5 at a time
-  delay_seconds = 10,  # Wait 10 seconds between batches
+  batch_size = 5,
+  delay_seconds = 10,
   verbose = TRUE
 )
-
-cat("\n✓ Batch processing complete\n")
 ```
 
-**Result**: Batch processing completed with automatic rate limiting.
-
-## Examine Results
+## Processing Results
 
 ```{r examine-results}
-cat("\n=== Processing Results ===\n\n")
+tibble(
+  Metric = c("Total processed", "Success rate"),
+  Value = c(nrow(results_df), paste0(round(nrow(results_df) / nrow(demo_sample) * 100), "%"))
+) %>% kable()
+```
 
-cat("Total processed:", nrow(results_df), "\n")
-cat("Success rate:", nrow(results_df) / 10 * 100, "%\n\n")
+## Sample Extracted Data
 
+```{r sample-data}
 if (nrow(results_df) > 0) {
-  cat("Sample of extracted data:\n")
-  print(head(results_df %>% select(id, fusarium_species, crop, modeling), 3))
+  results_df %>%
+    head(3) %>%
+    mutate(
+      species = sapply(fusarium_species, function(x) paste(x, collapse = ", ")),
+      crops = sapply(crop, function(x) paste(x, collapse = ", "))
+    ) %>%
+    select(id, species, crops, modeling) %>%
+    kable()
 }
 ```
 
-**Result**: Extraction results collected in structured data frame.
-
-## Save Batch Results
+## Save Results
 
 ```{r save-results}
 results_file <- file.path(data_dir, "batch_extraction_results_demo.rds")
 saveRDS(results_df, results_file)
 
-cat("✓ Results saved:", results_file, "\n")
+tibble(
+  Output = "Batch results",
+  Path = results_file,
+  Records = nrow(results_df)
+) %>% kable()
 ```
 
-**Result**: Batch results saved for analysis.
+## Batch Processing Features
 
-## Summary
-
-```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║        BATCH PROCESSING DEMONSTRATED               ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Batch Processing Features:\n")
-cat("  ✓ Rate limiting (10 studies/min)\n")
-cat("  ✓ Progress tracking\n")
-cat("  ✓ Error handling per document\n")
-cat("  ✓ Automatic delays between batches\n")
-cat("  ✓ Results aggregation\n\n")
-
-cat("For full dataset:\n")
-cat("  - Use smaller batch_size (5-10)\n")
-cat("  - Longer delay_seconds (30-60)\n")
-cat("  - Enable caching (notebook 0410)\n\n")
-
-cat("Next: Caching strategy in `0410_caching_strategy.Rmd`\n")
+```{r features}
+tibble(
+  Feature = c(
+    "Rate limiting",
+    "Progress tracking",
+    "Error handling per document",
+    "Automatic delays between batches",
+    "Results aggregation"
+  ),
+  Description = c(
+    "Respects API rate limits",
+    "Shows progress during processing",
+    "Continues on individual failures",
+    "Configurable delay between batches",
+    "Combines all results into data frame"
+  )
+) %>% kable()
 ```
-
-**Result**: Batch processing validated, ready for full-scale extraction.
 
 ## Next Steps
 
-1. ✓ Defined batch extraction function
-2. ✓ Processed 10 studies with rate limiting
-3. ✓ Validated results aggregation
-4. Next: Implement caching in `0410_caching_strategy.Rmd`
+Proceed to `0410_caching_strategy.Rmd` for caching implementation.

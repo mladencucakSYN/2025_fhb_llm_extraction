@@ -1,6 +1,8 @@
 ---
 title: "Fetch Literature from PubMed"
 output: html_document
+execute:
+  eval: false
 ---
 
 ```{r setup, include=FALSE}
@@ -126,24 +128,42 @@ cat(rep("-", 60), "\n", sep = "")
 
 Build a comprehensive search query for Fusarium ecophysiology research.
 
+### Query Syntax Reference
+
+PubMed query syntax:
+- `""` - exact phrase matching
+- `*` - wildcard for word endings (model* matches model, modeling, models)
+- `[]` - field specifiers (e.g., [Title/Abstract], [MeSH Terms])
+- Boolean: AND (both required), OR (either), NOT (exclude)
+- `()` - grouping terms
+
 ```{r build-query}
-# Query components
-fusarium_terms <- "(fusarium OR \"fusarium graminearum\" OR \"fusarium head blight\" OR FHB)"
-crop_terms <- "(wheat OR barley OR maize OR corn OR cereal OR grain)"
-abiotic_terms <- "(temperature OR water OR moisture OR humidity OR climate OR environment OR abiotic OR stress)"
+# Comprehensive query with specific Fusarium species and climate factors
+# Structure: Disease → Species → Hosts → Environment → Outcomes
 
-# Combine with Boolean logic
-fusarium_query <- paste(
-  fusarium_terms,
-  "AND",
-  crop_terms,
-  "AND",
-  abiotic_terms
-)
+fusarium_query <- '
+("fusarium head blight"[Title/Abstract] OR FHB[Title/Abstract] OR "wheat scab"[Title/Abstract] OR "ear blight"[Title/Abstract])
+AND
+(Fusarium[MeSH Terms] OR Fusarium[Title/Abstract] OR "Fusarium spp"[Title/Abstract] OR "Fusarium graminearum"[Title/Abstract] OR "Fusarium culmorum"[Title/Abstract] OR "Fusarium poae"[Title/Abstract] OR "Fusarium avenaceum"[Title/Abstract] OR "Fusarium temperatum"[Title/Abstract] OR "Fusarium equiseti"[Title/Abstract] OR "Fusarium langsethiae"[Title/Abstract] OR "Fusarium sporotrichioides"[Title/Abstract] OR "Fusarium tricinctum"[Title/Abstract] OR "Fusarium proliferatum"[Title/Abstract])
+AND
+("Cereals"[MeSH Terms] OR cereal*[Title/Abstract] OR wheat[Title/Abstract] OR barley[Title/Abstract] OR oat*[Title/Abstract] OR rye[Title/Abstract] OR maize[Title/Abstract] OR corn[Title/Abstract] OR rice[Title/Abstract] OR sorghum[Title/Abstract])
+AND
+("Environment"[MeSH Terms] OR "Climate Change"[MeSH Terms] OR climate[Title/Abstract] OR temperature[Title/Abstract] OR "heat stress"[Title/Abstract] OR humidity[Title/Abstract] OR "relative humidity"[Title/Abstract] OR rainfall[Title/Abstract] OR precipitation[Title/Abstract] OR drought[Title/Abstract] OR moisture[Title/Abstract] OR "water stress"[Title/Abstract] OR "water activity"[Title/Abstract] OR CO2[Title/Abstract] OR "solar radiation"[Title/Abstract] OR photoperiod[Title/Abstract] OR salinity[Title/Abstract] OR microclimate[Title/Abstract] OR "pH"[Title/Abstract] OR "soil nutrients"[Title/Abstract] OR "abiotic stress"[Title/Abstract])
+AND
+(model*[Title/Abstract] OR predict*[Title/Abstract] OR forecast*[Title/Abstract] OR "risk model"[Title/Abstract] OR "process-based"[Title/Abstract] OR "mechanistic"[Title/Abstract] OR ecology[Title/Abstract] OR epidemiology[Title/Abstract] OR virulence[Title/Abstract] OR pathogenicity[Title/Abstract] OR infection[Title/Abstract] OR sporulation[Title/Abstract] OR colonization[Title/Abstract] OR "mycotoxin production"[Title/Abstract] OR mycotoxin*[Title/Abstract] OR deoxynivalenol[Title/Abstract] OR DON[Title/Abstract] OR nivalenol[Title/Abstract] OR zearalenone[Title/Abstract] OR enniatin*[Title/Abstract] OR beauvericin[Title/Abstract] OR "T-2"[Title/Abstract] OR "HT-2"[Title/Abstract] OR "emerging mycotoxin"[Title/Abstract])
+AND
+Journal Article[PT]
+'
 
-cat("Fusarium Ecophysiology Query:\n")
+cat("Fusarium Ecophysiology Query (PubMed):\n")
 cat(rep("=", 70), "\n", sep = "")
-cat(strwrap(fusarium_query, width = 70), sep = "\n")
+cat("Query includes:\n")
+cat("  - Disease terms: FHB, wheat scab, ear blight\n")
+cat("  - 12 Fusarium species\n")
+cat("  - 9 cereal crops\n")
+cat("  - 20+ abiotic/climate factors\n")
+cat("  - Outcomes: modeling, infection, mycotoxins (incl. emerging)\n")
+cat("  - Document type: Journal articles only\n")
 cat(rep("=", 70), "\n", sep = "")
 ```
 

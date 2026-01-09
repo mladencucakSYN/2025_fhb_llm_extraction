@@ -12,14 +12,14 @@
 #' @param abstract Character string with the abstract text
 #' @param title Character string with the paper title (optional)
 #' @param keywords Character string with keywords (optional)
-#' @param model Gemini model to use (default: "gemini-2.0-flash-exp")
+#' @param model Gemini model to use (default: "gemini-2.5-flash-lite")
 #' @param api_key Google API key (defaults to GOOGLE_API_KEY env var)
 #' @return List with extracted information
 #' @export
 extract_fusarium_gemini <- function(abstract,
                                     title = "",
                                     keywords = "",
-                                    model = "gemini-2.0-flash-exp",
+                                    model = "gemini-2.5-flash-lite",
                                     api_key = Sys.getenv("GOOGLE_API_KEY")) {
 
   if (!requireNamespace("ellmer", quietly = TRUE)) {
@@ -29,6 +29,11 @@ extract_fusarium_gemini <- function(abstract,
   if (api_key == "") {
     stop("GOOGLE_API_KEY environment variable not set")
   }
+
+  # Handle NA/NULL values
+  title <- if (is.null(title) || is.na(title)) "" else as.character(title)
+  keywords <- if (is.null(keywords) || is.na(keywords)) "" else as.character(keywords)
+  abstract <- if (is.null(abstract) || is.na(abstract)) "" else as.character(abstract)
 
   # Combine text fields
   full_text <- paste(
@@ -82,6 +87,7 @@ Do not include any text before or after the JSON.
 
   response <- chat$chat(prompt)
 
+<<<<<<< HEAD
   clean_json <- function(txt) {
     txt <- gsub("```json", "", txt)
     txt <- gsub("```", "", txt)
@@ -117,6 +123,34 @@ Do not include any text before or after the JSON.
     })
     
     parsed
+=======
+  # Clean response - remove markdown code fences if present
+  clean_response <- response
+  clean_response <- gsub("^```json\\s*", "", clean_response)
+  clean_response <- gsub("^```\\s*", "", clean_response)
+  clean_response <- gsub("\\s*```$", "", clean_response)
+  clean_response <- trimws(clean_response)
+
+  # Parse JSON response
+  parsed <- tryCatch({
+    jsonlite::fromJSON(clean_response, simplifyVector = FALSE)
+  }, error = function(e) {
+    warning(sprintf("Failed to parse JSON response: %s", conditionMessage(e)))
+    warning(sprintf("Raw response: %s", substr(response, 1, 200)))
+    list(
+      fusarium_species = list(),
+      crop = list(),
+      abiotic_factors = list(),
+      observed_effects = list(),
+      agronomic_practices = list(),
+      modeling = FALSE,
+      summary = "Error parsing response",
+      raw_response = response
+    )
+  })
+
+  parsed
+>>>>>>> origin/main
 }
   
 

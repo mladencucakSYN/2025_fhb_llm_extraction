@@ -1,6 +1,10 @@
 {
   "version": ["1.0"],
+<<<<<<< HEAD
   "date": ["2025-12-09"],
   "prompt_template": ["See build_extraction_prompt() function"],
+=======
+  "date": ["2025-12-15"],
+>>>>>>> origin/main
   "notes": ["Prompt includes detailed instructions for each field and JSON output format"]
 }

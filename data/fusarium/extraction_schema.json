@@ -1,10 +1,18 @@
 {
   "version": "1.0",
+<<<<<<< HEAD
   "date": "2025-12-09",
   "fields": {
     "fusarium_species": {
       "type": "array",
       "description": "List of Fusarium species mentioned (e.g., F. graminearum, F. culmorum)",
+=======
+  "date": "2025-12-15",
+  "fields": {
+    "fusarium_species": {
+      "type": "array",
+      "description": "List of Fusarium species mentioned",
+>>>>>>> origin/main
       "examples": ["Fusarium graminearum", "F. culmorum", "F. avenaceum"]
     },
     "crop": {
@@ -25,17 +33,29 @@
     "observed_effects": {
       "type": "array",
       "description": "Effects on crop or disease observed",
+<<<<<<< HEAD
       "examples": ["yield loss", "disease severity", "toxin production", "infection rate"]
+=======
+      "examples": ["yield loss", "disease severity", "toxin production"]
+>>>>>>> origin/main
     },
     "agronomic_practices": {
       "type": "array",
       "description": "Management or agronomic practices mentioned",
+<<<<<<< HEAD
       "examples": ["fungicide application", "crop rotation", "resistant cultivars", "tillage"]
     },
     "modeling": {
       "type": "boolean",
       "description": "Whether study involves predictive modeling or simulation",
       "examples": ["true", "false"]
+=======
+      "examples": ["fungicide application", "crop rotation", "resistant cultivars"]
+    },
+    "modeling": {
+      "type": "boolean",
+      "description": "Whether study involves predictive modeling or simulation"
+>>>>>>> origin/main
     },
     "study_type": {
       "type": "array",
@@ -44,8 +64,12 @@
     },
     "summary": {
       "type": "string",
+<<<<<<< HEAD
       "description": "Brief 1-2 sentence summary of main findings",
       "examples": "Temperature between 20-25°C optimized F. graminearum growth and DON production in wheat."
+=======
+      "description": "Brief 1-2 sentence summary of main findings"
+>>>>>>> origin/main
     }
   },
   "json_template": {

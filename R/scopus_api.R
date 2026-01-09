@@ -132,7 +132,7 @@ parse_scopus_entries <- function(entries) {
   # Build standardized data frame
   articles <- tibble(
     scopus_id = safe_extract("dc:identifier"),
-    eid = safe_extract("eid"),
+    id = safe_extract("eid"),
     doi = safe_extract("prism:doi"),
     title = safe_extract("dc:title"),
     abstract = safe_extract("dc:description"),

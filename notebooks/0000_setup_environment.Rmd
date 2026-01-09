@@ -5,327 +5,187 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = TRUE)
+library(knitr)
 ```
 
 ## Project Setup
 
 This notebook verifies the R environment and installs all required packages for the LLM text extraction project.
 
-### Purpose
-
-Before beginning any extraction work, we need to ensure:
-- Required R packages are installed
-- API keys are properly configured
-- Project directories exist
-- R environment is correctly set up
-
 ## Check R Version
 
-Current R installation details.
-
 ```{r check-r-version}
-cat("R version:", R.version.string, "\n")
-cat("Platform:", R.version$platform, "\n")
-cat("Working directory:", getwd(), "\n")
+tibble::tibble(
+  Property = c("R Version", "Platform", "Working Directory"),
+  Value = c(R.version.string, R.version$platform, getwd())
+) %>% kable()
 ```
-
-**Result**: R environment information displayed.
 
 ## Required Packages
 
-The project requires these packages for LLM extraction and analysis.
-
 ```{r package-list}
 required_packages <- c(
-  "ellmer",        # Google Gemini API interface
-  "httr",          # HTTP requests for PubMed/Scopus APIs
-  "xml2",          # XML parsing for PubMed responses
-  "dplyr",         # Data manipulation
-  "tidyr",         # Data tidying
-  "stringr",       # String operations
-  "ggplot2",       # Visualization
-  "jsonlite",      # JSON parsing
-  "readr",         # File reading
-  "purrr",         # Functional programming
-  "tidytext",      # Text mining
-  "topicmodels",   # LDA topic modeling
-  "wordcloud"      # Word cloud visualizations
+  "ellmer",
+  "httr",
+  "xml2",
+  "dplyr",
+  "tidyr",
+  "stringr",
+  "ggplot2",
+  "jsonlite",
+  "readr",
+  "purrr",
+  "tidytext",
+  "topicmodels",
+  "wordcloud"
 )
 
-cat("Required packages:\n")
-print(required_packages)
+tibble::tibble(Package = required_packages) %>% kable()
 ```
-
-**Result**: List of thirteen required packages defined.
 
 ## Check Installed Packages
 
-Identify which packages are already installed versus missing.
-
 ```{r check-packages}
 installed <- sapply(required_packages, function(pkg) {
+
   requireNamespace(pkg, quietly = TRUE)
 })
 
-cat("\nPackage Status:\n")
-cat(rep("-", 40), "\n", sep = "")
-for (i in seq_along(required_packages)) {
-  status <- if (installed[i]) "✓ Installed" else "✗ Missing"
-  cat(sprintf("%-20s %s\n", required_packages[i], status))
-}
+tibble::tibble(
+  Package = required_packages,
+  Status = ifelse(installed, "Installed", "Missing")
+) %>% kable()
 
 missing_packages <- required_packages[!installed]
-cat(rep("-", 40), "\n", sep = "")
-cat(sprintf("\nMissing packages: %d\n", length(missing_packages)))
 ```
-
-**Result**: Package installation status checked.
 
 ## Install Missing Packages
 
-Install any packages that are not yet installed.
-
 ```{r install-packages}
 if (length(missing_packages) > 0) {
-  cat("\nInstalling missing packages...\n")
-
   for (pkg in missing_packages) {
-    cat(sprintf("  Installing %s...\n", pkg))
     install.packages(pkg, repos = "https://cloud.r-project.org", quiet = TRUE)
   }
-
-  cat("\n✓ Package installation complete\n")
-} else {
-  cat("\n✓ All required packages are already installed\n")
 }
-```
 
-**Result**: Missing packages installed from CRAN.
+tibble::tibble(
+  Metric = c("Missing packages", "Action"),
+  Value = c(
+    length(missing_packages),
+    ifelse(length(missing_packages) > 0, "Installed", "None needed")
+  )
+) %>% kable()
+```
 
 ## Verify Package Loading
 
-Test that all packages can be loaded successfully.
-
 ```{r load-packages}
-cat("\nLoading packages...\n")
 load_success <- sapply(required_packages, function(pkg) {
-  result <- tryCatch({
+  tryCatch({
     library(pkg, character.only = TRUE)
     TRUE
-  }, error = function(e) {
-    cat(sprintf("  ✗ Failed to load %s: %s\n", pkg, conditionMessage(e)))
-    FALSE
-  })
-  result
+  }, error = function(e) FALSE)
 })
 
-if (all(load_success)) {
-  cat("✓ All packages loaded successfully\n")
-} else {
-  failed <- required_packages[!load_success]
-  cat(sprintf("✗ Failed to load: %s\n", paste(failed, collapse = ", ")))
-}
+tibble::tibble(
+  Package = required_packages,
+  Loaded = ifelse(load_success, "Yes", "No")
+) %>% kable()
 ```
-
-**Result**: All packages loaded and verified.
 
 ## Check API Key Configuration
 
-Verify that API keys for Gemini, PubMed, and Scopus are configured.
-
 ```{r check-api-key}
-# Load .env file if it exists
 if (file.exists(".env")) {
   readRenviron(".env")
-  cat("✓ Loaded .env file\n")
-} else {
-  cat("⚠ No .env file found in project directory\n")
 }
 
-# Check all API keys
 google_key <- Sys.getenv("GOOGLE_API_KEY")
 pubmed_key <- Sys.getenv("PUB_MED_API_KEY")
 scopus_key <- Sys.getenv("SCOPUS_API_KEY")
 
+tibble::tibble(
+  `API Key` = c("GOOGLE_API_KEY", "PUB_MED_API_KEY", "SCOPUS_API_KEY"),
+  Status = c(
+    ifelse(nchar(google_key) > 0, "Configured", "Not set"),
+    ifelse(nchar(pubmed_key) > 0, "Configured", "Not set (optional)"),
+    ifelse(nchar(scopus_key) > 0, "Configured", "Not set")
+  )
+) %>% kable()
+```
+
+## Check Project Directory Structure
+
+```{r check-directories}
+required_dirs <- c(
+  "data", "data/cache", "data/logs", "data/fusarium",
+  "R", "notebooks", "results", "dev"
+)
+
+dir_status <- sapply(required_dirs, function(dir_path) {
+  exists <- dir.exists(dir_path)
+  if (!exists) {
+    dir.create(dir_path, showWarnings = FALSE, recursive = TRUE)
+  }
+  dir.exists(dir_path)
+})
+
+tibble::tibble(
+  Directory = required_dirs,
+  Status = ifelse(dir_status, "Ready", "Created")
+) %>% kable()
+```
+
+## Source Project Functions
+
+```{r source-functions}
+r_files <- c(
+  "R/utils.R", "R/pubmed_api.R", "R/scopus_api.R", "R/retry_logic.R",
+  "R/batch_processor.R", "R/cache_manager.R", "R/gemini_extraction.R",
+  "R/extractors.R", "R/evaluation.R"
+)
+
+source_status <- sapply(r_files, function(r_file) {
+  if (file.exists(r_file)) {
+    source(r_file)
+    "Loaded"
+  } else {
+    "Missing"
+  }
+})
+
+tibble::tibble(
+  File = r_files,
+  Status = source_status
+) %>% kable()
+```
+
+## Environment Summary
+
+```{r summary}
 google_set <- nchar(google_key) > 0
 pubmed_set <- nchar(pubmed_key) > 0
 scopus_set <- nchar(scopus_key) > 0
 
-cat("\nAPI Key Status:\n")
-cat(rep("-", 40), "\n", sep = "")
-cat("GOOGLE_API_KEY:  ", ifelse(google_set, "✓ SET", "✗ NOT SET"), "\n")
-cat("PUB_MED_API_KEY: ", ifelse(pubmed_set, "✓ SET", "✗ NOT SET"), " (optional)\n")
-cat("SCOPUS_API_KEY:  ", ifelse(scopus_set, "✓ SET", "✗ NOT SET"), "\n")
-
-if (google_set) {
-  cat("\nGemini API:\n")
-  cat("  Key length:", nchar(google_key), "characters\n")
-  cat("  Key preview:", substr(google_key, 1, 10), "...\n")
-}
-
-if (pubmed_set) {
-  cat("\nPubMed API:\n")
-  cat("  Key length:", nchar(pubmed_key), "characters\n")
-  cat("  Key preview:", substr(pubmed_key, 1, 8), "...\n")
-  cat("  Rate limit: 10 requests/second (with key)\n")
-} else {
-  cat("\nPubMed API: No key (3 requests/second without key)\n")
-}
-
-if (scopus_set) {
-  cat("\nScopus API:\n")
-  cat("  Key length:", nchar(scopus_key), "characters\n")
-  cat("  Key preview:", substr(scopus_key, 1, 8), "...\n")
-}
-
-cat(rep("-", 40), "\n", sep = "")
-cat("\nTo set up API keys, add to .env file:\n")
-cat("  GOOGLE_API_KEY=your_google_key     (required for LLM extraction)\n")
-cat("  PUB_MED_API_KEY=your_pubmed_key    (optional, increases rate limit)\n")
-cat("  SCOPUS_API_KEY=your_scopus_key     (required for Scopus data fetching)\n")
+tibble::tibble(
+  Component = c(
+    "R Version", "Packages", "Google API",
+    "PubMed API", "Scopus API", "Directories", "Functions"
+  ),
+  Status = c(
+    R.version.string,
+    ifelse(all(load_success), "All loaded", "Some failed"),
+    ifelse(google_set, "Configured", "Not set"),
+    ifelse(pubmed_set, "Configured", "Optional"),
+    ifelse(scopus_set, "Configured", "Not set"),
+    "Ready",
+    "Loaded"
+  )
+) %>% kable()
 ```
-
-**Result**: All API key configurations displayed.
-
-## Check Project Directory Structure
-
-Verify that required directories exist for data, cache, and logs.
-
-```{r check-directories}
-required_dirs <- c(
-  "data",
-  "data/cache",
-  "data/logs",
-  "data/fusarium",
-  "R",
-  "notebooks",
-  "results",
-  "dev"
-)
-
-cat("\nProject Directory Structure:\n")
-cat(rep("-", 40), "\n", sep = "")
-
-for (dir_path in required_dirs) {
-  exists <- dir.exists(dir_path)
-  status <- if (exists) "✓" else "✗"
-  cat(sprintf("%s %-20s\n", status, dir_path))
-
-  # Create if missing
-  if (!exists) {
-    dir.create(dir_path, showWarnings = FALSE, recursive = TRUE)
-    cat(sprintf("    Created: %s\n", dir_path))
-  }
-}
-
-cat(rep("-", 40), "\n", sep = "")
-cat("✓ All required directories exist\n")
-```
-
-**Result**: Directory structure verified and created as needed.
-
-## Source Project Functions
-
-Load custom R functions from the R/ directory.
-
-```{r source-functions}
-r_files <- c(
-  "R/utils.R",
-  "R/pubmed_api.R",
-  "R/scopus_api.R",
-  "R/retry_logic.R",
-  "R/batch_processor.R",
-  "R/cache_manager.R",
-  "R/gemini_extraction.R",
-  "R/extractors.R",
-  "R/evaluation.R"
-)
-
-cat("\nLoading project functions:\n")
-cat(rep("-", 40), "\n", sep = "")
-
-for (r_file in r_files) {
-  if (file.exists(r_file)) {
-    source(r_file)
-    cat(sprintf("✓ Loaded: %s\n", r_file))
-  } else {
-    cat(sprintf("⚠ Missing: %s\n", r_file))
-  }
-}
-
-cat(rep("-", 40), "\n", sep = "")
-```
-
-**Result**: Project functions loaded into R session.
-
-## Environment Summary
-
-Display final setup status.
-
-```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════╗\n")
-cat("║     ENVIRONMENT SETUP COMPLETE         ║\n")
-cat("╚════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Status Summary:\n")
-cat(rep("-", 40), "\n", sep = "")
-cat("R Version:       ", R.version.string, "\n")
-cat("Packages:        ", ifelse(all(load_success), "✓ All loaded", "⚠ Some failed"), "\n")
-cat("Google API:      ", ifelse(google_set, "✓ Configured", "✗ Not set"), "\n")
-cat("PubMed API:      ", ifelse(pubmed_set, "✓ Configured", "○ Optional"), "\n")
-cat("Scopus API:      ", ifelse(scopus_set, "✓ Configured", "✗ Not set"), "\n")
-cat("Directories:     ✓ Ready\n")
-cat("Functions:       ✓ Loaded\n")
-cat(rep("-", 40), "\n", sep = "")
-
-ready_for_extraction <- all(load_success) && google_set
-ready_for_fetching <- all(load_success) && (pubmed_set || scopus_set)
-
-if (ready_for_extraction) {
-  cat("\n✓ Environment ready for LLM extraction!\n")
-  cat("  Next: Run notebook 0010_test_gemini_api.Rmd\n")
-}
-
-if (ready_for_fetching) {
-  cat("\n✓ Environment ready for data fetching!\n")
-  cat("  Next: Run notebook 0090_fetch_pubmed_data.Rmd or 0095_fetch_scopus_data.Rmd\n")
-}
-
-if (!ready_for_extraction && !ready_for_fetching) {
-  cat("\n⚠ Setup items need attention:\n")
-  if (!all(load_success)) {
-    cat("  - Fix package loading errors\n")
-  }
-  if (!google_set) {
-    cat("  - Configure GOOGLE_API_KEY for LLM extraction\n")
-  }
-  if (!pubmed_set && !scopus_set) {
-    cat("  - Configure PUB_MED_API_KEY or SCOPUS_API_KEY for data fetching\n")
-  }
-}
-```
-
-**Result**: Environment setup status summarized.
 
 ## Next Steps
 
 1. If API key is not set, obtain one from Google AI Studio
 2. Create `.env` file with your API key
 3. Proceed to `0010_test_gemini_api.Rmd` to test API connectivity
-4. Continue with `0020_toy_example_extraction.Rmd` for basic extraction concepts
-
-## Configuration Notes
-
-### API Key Security
-
-The `.env` file is in `.gitignore` to prevent accidental commits of API keys to version control. Never hardcode API keys in notebooks or scripts.
-
-### Package Versions
-
-This project uses the latest CRAN versions of all packages. If you encounter compatibility issues, check `renv.lock` for specific version requirements.
-
-### Directory Structure
-
-The data directories (`cache`, `logs`, `fusarium`) are also in `.gitignore` to avoid committing large data files. Only `.gitkeep` files are tracked to preserve directory structure.

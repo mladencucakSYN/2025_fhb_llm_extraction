@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Assessing Extraction Quality
+## Overview
 
 This notebook performs quality assessment on extracted data by comparing against manual annotations and identifying patterns in extraction errors.
+
+## Load Packages and Data
 
 ```{r load-packages}
 library(dplyr)
@@ -18,29 +21,22 @@ library(ggplot2)
 data_dir <- "../data/fusarium"
 ```
 
-**Result**: Ready for quality assessment.
-
-## Load Extraction Results
-
 ```{r load-data}
 all_results <- readRDS(file.path(data_dir, "batch_extraction_results_demo.rds"))
 
-cat("✓ Loaded", nrow(all_results), "extraction results\n")
+tibble(
+  Dataset = "Extraction results",
+  Records = nrow(all_results)
+) %>% kable()
 ```
 
-**Result**: Extraction results loaded.
-
-## Manual Gold Standard Annotation
+## Gold Standard Framework
 
 For a subset of documents, create manual annotations to evaluate accuracy.
 
 ```{r gold-standard}
-# In practice, student would manually review 20-50 documents
-# Here we demonstrate the structure
-
 gold_standard <- tibble(
   id = all_results$id[1:3],
-  # Manual annotations would go here
   manual_species = list(
     c("Fusarium graminearum"),
     c("Fusarium culmorum", "Fusarium avenaceum"),
@@ -53,92 +49,72 @@ gold_standard <- tibble(
   )
 )
 
-cat("Gold standard created for", nrow(gold_standard), "documents\n")
-cat("(In practice, annotate 20-50 documents manually)\n")
+tibble(
+  Metric = c("Gold standard documents", "Target for validation"),
+  Value = c(nrow(gold_standard), "20-50 documents")
+) %>% kable()
 ```
 
-**Result**: Gold standard template established for validation.
+## Calculate Extraction Success Rates
 
-## Calculate Precision and Recall
-
-Compare extractions against manual annotations.
-
-```{r calculate-metrics}
-# For demonstration, compare first 3 documents
-comparison <- all_results %>%
-  filter(id %in% gold_standard$id) %>%
-  left_join(gold_standard, by = "id")
-
-cat("\nQuality Metrics:\n")
-cat(rep("-", 60), "\n", sep = "")
-
-# In practice, calculate precision/recall for each field
-# Using evaluation functions from R/evaluation.R
-
-cat("Species Extraction:\n")
-cat("  Manual review needed for full metrics\n")
-cat("  Spot check first few documents\n\n")
-
-cat("Crop Extraction:\n")
-cat("  Manual review needed for full metrics\n")
-cat("  Spot check first few documents\n")
-```
-
-**Result**: Quality assessment framework established.
-
-## Identify Common Extraction Patterns
-
-Analyze what types of information are consistently vs. inconsistently extracted.
-
-```{r extraction-patterns}
-cat("\n=== Extraction Patterns ===\n\n")
-
-# Fields with high extraction rates
-high_extraction <- all_results %>%
+```{r calculate-metrics, fig.width=10, fig.height=5}
+extraction_rates <- all_results %>%
   summarise(
-    species_rate = mean(sapply(fusarium_species, length) > 0) * 100,
-    crop_rate = mean(sapply(crop, length) > 0) * 100,
-    abiotic_rate = mean(sapply(abiotic_factors, length) > 0) * 100,
-    mycotoxin_rate = mean(sapply(mycotoxins, length) > 0) * 100
-  )
+    Species = mean(sapply(fusarium_species, length) > 0) * 100,
+    Crops = mean(sapply(crop, length) > 0) * 100,
+    `Abiotic Factors` = mean(sapply(abiotic_factors, length) > 0) * 100,
+    Mycotoxins = mean(sapply(mycotoxins, length) > 0) * 100,
+    Practices = mean(sapply(agronomic_practices, length) > 0) * 100
+  ) %>%
+  tidyr::pivot_longer(everything(), names_to = "Field", values_to = "Success_Rate")
 
-cat("Extraction Success Rates:\n")
-cat("  Fusarium species:", round(high_extraction$species_rate, 1), "%\n")
-cat("  Crops:", round(high_extraction$crop_rate, 1), "%\n")
-cat("  Abiotic factors:", round(high_extraction$abiotic_rate, 1), "%\n")
-cat("  Mycotoxins:", round(high_extraction$mycotoxin_rate, 1), "%\n")
+ggplot(extraction_rates, aes(x = reorder(Field, Success_Rate), y = Success_Rate)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = paste0(round(Success_Rate, 1), "%")), hjust = -0.1) +
+  coord_flip() +
+  labs(
+    title = "Extraction Success Rates by Field",
+    x = "Field",
+    y = "Success Rate (%)"
+  ) +
+  theme_minimal() +
+  expand_limits(y = 100)
+
+extraction_rates %>%
+  mutate(Success_Rate = paste0(round(Success_Rate, 1), "%")) %>%
+  kable()
 ```
 
-**Result**: Extraction patterns reveal which fields are reliably captured.
+## Quality Assessment Framework
 
-## Summary
-
-```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║        QUALITY ASSESSMENT COMPLETE                 ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
-
-cat("Quality Assessment:\n")
-cat("  ✓ Gold standard framework established\n")
-cat("  ✓ Extraction patterns analyzed\n")
-cat("  ✓ High-confidence fields identified\n\n")
-
-cat("Recommendations:\n")
-cat("  - Manually annotate 20-50 documents\n")
-cat("  - Calculate precision/recall per field\n")
-cat("  - Refine prompts for low-performing fields\n")
-cat("  - Re-extract problematic documents\n\n")
-
-cat("Next: Aggregate results in `0520_aggregate_results.Rmd`\n")
+```{r quality-framework}
+tibble(
+  Step = c(1, 2, 3, 4, 5),
+  Task = c(
+    "Manually annotate 20-50 documents",
+    "Compare extractions against manual annotations",
+    "Calculate precision and recall per field",
+    "Identify patterns in extraction errors",
+    "Refine prompts for low-performing fields"
+  ),
+  Status = c("TODO", "TODO", "TODO", "TODO", "TODO")
+) %>% kable(caption = "Quality Assessment Workflow")
 ```
 
-**Result**: Quality assessment provides confidence in extraction accuracy.
+## Recommendations
+
+```{r recommendations}
+tibble(
+  Recommendation = c(
+    "Manually annotate 20-50 documents",
+    "Calculate precision/recall per field",
+    "Refine prompts for low-performing fields",
+    "Re-extract problematic documents"
+  ),
+  Priority = c("High", "High", "Medium", "Low")
+) %>% kable()
+```
 
 ## Next Steps
 
-1. ✓ Established gold standard framework
-2. ✓ Analyzed extraction patterns
-3. TODO: Manual annotation of 20-50 documents (student task)
-4. Next: Aggregate results in `0520_aggregate_results.Rmd`
+Proceed to `0510_manual_validation.Rmd` for manual validation setup.

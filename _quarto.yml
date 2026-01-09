@@ -1,0 +1,162 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - index.qmd
+    - notebooks/*.Rmd
+
+website:
+  title: "FHB LLM Extraction"
+  description: "LLM-based text extraction for Fusarium head blight research"
+
+  navbar:
+    left:
+      - text: "Home"
+        href: index.qmd
+      - text: "Setup"
+        menu:
+          - text: "Environment Setup"
+            href: notebooks/0000_setup_environment.Rmd
+          - text: "Project Structure"
+            href: notebooks/0005_project_structure_and_functions.Rmd
+          - text: "Test Gemini API"
+            href: notebooks/0010_test_gemini_api.Rmd
+          - text: "Toy Example"
+            href: notebooks/0020_toy_example_extraction.Rmd
+          - text: "Error Handling"
+            href: notebooks/0030_error_handling_basics.Rmd
+      - text: "Data Fetching"
+        menu:
+          - text: "Fetch PubMed"
+            href: notebooks/0090_fetch_pubmed_data.Rmd
+          - text: "Working with Lists"
+            href: notebooks/0092_working_with_lists.Rmd
+          - text: "Fetch Scopus"
+            href: notebooks/0095_fetch_scopus_data.Rmd
+          - text: "Fetch OpenAlex"
+            href: notebooks/0097_fetch_openalex_data.Rmd
+          - text: "Fetch Full-Text"
+            href: notebooks/0098_fetch_fulltext.Rmd
+      - text: "Data Loading"
+        menu:
+          - text: "Load Data"
+            href: notebooks/0100_load_fusarium_data.Rmd
+          - text: "Preprocess Abstracts"
+            href: notebooks/0110_preprocess_abstracts.Rmd
+          - text: "Exploratory Analysis"
+            href: notebooks/0120_exploratory_analysis.Rmd
+      - text: "Topic Modeling"
+        menu:
+          - text: "LDA First Pass"
+            href: notebooks/0200_lda_first_pass.Rmd
+          - text: "Topic Interpretation"
+            href: notebooks/0210_topic_interpretation.Rmd
+          - text: "Subset Ecophysiology"
+            href: notebooks/0220_subset_ecophysiology.Rmd
+          - text: "Create Test Sample"
+            href: notebooks/0230_create_test_sample.Rmd
+      - text: "Extraction"
+        menu:
+          - text: "Design Schema"
+            href: notebooks/0300_design_extraction_schema.Rmd
+          - text: "Develop Prompts"
+            href: notebooks/0310_develop_prompts.Rmd
+          - text: "Single Test"
+            href: notebooks/0320_single_extraction_test.Rmd
+          - text: "Handle Errors"
+            href: notebooks/0330_handle_errors.Rmd
+      - text: "Production"
+        menu:
+          - text: "Batch Processing"
+            href: notebooks/0400_batch_processing.Rmd
+          - text: "Caching Strategy"
+            href: notebooks/0410_caching_strategy.Rmd
+          - text: "Full Extraction"
+            href: notebooks/0420_run_full_extraction.Rmd
+          - text: "Diagnostics"
+            href: notebooks/0430_extraction_diagnostics.Rmd
+      - text: "Validation"
+        menu:
+          - text: "Quality Assessment"
+            href: notebooks/0500_quality_assessment.Rmd
+          - text: "Manual Validation"
+            href: notebooks/0510_manual_validation.Rmd
+          - text: "Aggregate Results"
+            href: notebooks/0520_aggregate_results.Rmd
+          - text: "Final Analysis"
+            href: notebooks/0530_fusarium_analysis.Rmd
+
+    right:
+      - icon: github
+        href: https://github.com/mladencucakSYN/2025_fhb_llm_extraction
+
+  sidebar:
+    - title: "Workflow"
+      style: "docked"
+      contents:
+        - section: "Setup (0000-0030)"
+          contents:
+            - notebooks/0000_setup_environment.Rmd
+            - notebooks/0005_project_structure_and_functions.Rmd
+            - notebooks/0010_test_gemini_api.Rmd
+            - notebooks/0020_toy_example_extraction.Rmd
+            - notebooks/0030_error_handling_basics.Rmd
+        - section: "Data Fetching (0090-0098)"
+          contents:
+            - notebooks/0090_fetch_pubmed_data.Rmd
+            - notebooks/0092_working_with_lists.Rmd
+            - notebooks/0095_fetch_scopus_data.Rmd
+            - notebooks/0097_fetch_openalex_data.Rmd
+            - notebooks/0098_fetch_fulltext.Rmd
+        - section: "Data Loading (0100-0120)"
+          contents:
+            - notebooks/0100_load_fusarium_data.Rmd
+            - notebooks/0110_preprocess_abstracts.Rmd
+            - notebooks/0120_exploratory_analysis.Rmd
+        - section: "Topic Modeling (0200-0230)"
+          contents:
+            - notebooks/0200_lda_first_pass.Rmd
+            - notebooks/0210_topic_interpretation.Rmd
+            - notebooks/0220_subset_ecophysiology.Rmd
+            - notebooks/0230_create_test_sample.Rmd
+        - section: "Extraction (0300-0330)"
+          contents:
+            - notebooks/0300_design_extraction_schema.Rmd
+            - notebooks/0310_develop_prompts.Rmd
+            - notebooks/0320_single_extraction_test.Rmd
+            - notebooks/0330_handle_errors.Rmd
+        - section: "Production (0400-0430)"
+          contents:
+            - notebooks/0400_batch_processing.Rmd
+            - notebooks/0410_caching_strategy.Rmd
+            - notebooks/0420_run_full_extraction.Rmd
+            - notebooks/0430_extraction_diagnostics.Rmd
+        - section: "Validation (0500-0530)"
+          contents:
+            - notebooks/0500_quality_assessment.Rmd
+            - notebooks/0510_manual_validation.Rmd
+            - notebooks/0520_aggregate_results.Rmd
+            - notebooks/0530_fusarium_analysis.Rmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-tools: true
+    code-line-numbers: true
+    highlight-style: github
+
+execute:
+  eval: true
+  freeze: auto
+  error: true
+
+knitr:
+  opts_chunk:
+    echo: true
+    message: false
+    warning: false
+    fig.width: 8
+    fig.height: 6

@@ -5,11 +5,14 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(knitr)
 ```
 
-## Creating Test Samples
+## Overview
 
 This notebook creates stratified test samples of different sizes for testing extraction before processing the full dataset.
+
+## Load Packages and Data
 
 ```{r load-packages}
 library(dplyr)
@@ -18,91 +21,101 @@ library(readr)
 data_dir <- "../data/fusarium"
 ```
 
-**Result**: Ready for sampling.
-
-## Load Filtered Dataset
-
 ```{r load-data}
 ecophys_data <- readRDS(file.path(data_dir, "fusarium_ecophysiology_subset.rds"))
 
-cat("✓ Ecophysiology subset loaded\n")
-cat("  Total studies:", nrow(ecophys_data), "\n")
+tibble(
+  Dataset = "Ecophysiology subset",
+  Records = nrow(ecophys_data)
+) %>% kable()
 ```
 
-**Result**: Filtered ecophysiology dataset loaded.
+## Create Stratified Samples
 
-## Create Multiple Sample Sizes
-
-Create samples of different sizes for iterative testing.
+Create samples of 10, 50, and 100 studies for iterative testing.
 
 ```{r create-samples}
-set.seed(123)  # Reproducibility
+set.seed(123)
 
-# Sample sizes for testing
 sample_sizes <- c(10, 50, 100)
+shuffled_data <- ecophys_data[sample(nrow(ecophys_data)), ]
+
+sample_info <- tibble(
+  Size = integer(),
+  Actual = integer(),
+  Path = character()
+)
 
 for (size in sample_sizes) {
-  # Stratified sample across topics
-  sample_data <- ecophys_data %>%
+  sample_data <- shuffled_data %>%
     group_by(topic) %>%
+<<<<<<< HEAD
     slice_sample(n = min(ceiling(size/6), nrow(.))) %>%  # Proportional sampling
     ungroup() %>%
     slice_sample(n = min(size, nrow(.)))  # Limit to target size
+=======
+    slice_head(n = ceiling(size / n_distinct(ecophys_data$topic))) %>%
+    ungroup()
 
-  # Save sample
+  if (nrow(sample_data) > size) {
+    sample_data <- sample_data[1:size, ]
+  }
+>>>>>>> origin/main
+
   sample_file <- file.path(data_dir, sprintf("sample_%d_studies.rds", size))
   saveRDS(sample_data, sample_file)
 
-  cat(sprintf("✓ Created sample of %d studies: %s\n", nrow(sample_data), sample_file))
+  sample_info <- bind_rows(sample_info, tibble(
+    Size = size,
+    Actual = nrow(sample_data),
+    Path = sample_file
+  ))
 }
+
+sample_info %>% kable()
 ```
 
-**Result**: Test samples of 10, 50, and 100 studies created.
-
-## Sample Characteristics
-
-Verify sample representativeness.
+## 10-Study Sample Characteristics
 
 ```{r sample-characteristics}
 sample_10 <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
 
-cat("\n10-Study Sample Characteristics:\n")
-cat("  Topics represented:\n")
-print(table(sample_10$topic))
-
-cat("\n  Sample titles:\n")
-for (i in 1:nrow(sample_10)) {
-  cat(sprintf("  %d. %s\n", i, substr(sample_10$title[i], 1, 70)))
-}
+sample_10 %>%
+  count(topic, name = "n_studies") %>%
+  kable(caption = "Topic distribution in 10-study sample")
 ```
 
-**Result**: Test samples are stratified across topics.
+## Sample Titles
+
+```{r sample-titles}
+sample_10 %>%
+  mutate(
+    n = row_number(),
+    title_short = substr(title, 1, 70)
+  ) %>%
+  select(n, title_short) %>%
+  kable()
+```
 
 ## Summary
 
 ```{r summary}
-cat("\n")
-cat("╔════════════════════════════════════════════════════╗\n")
-cat("║        TEST SAMPLES CREATED                        ║\n")
-cat("╚════════════════════════════════════════════════════╝\n")
-cat("\n")
+full_corpus <- readRDS(file.path(data_dir, "fusarium_studies_extraction_ready.rds"))
+sample_50 <- readRDS(file.path(data_dir, "sample_50_studies.rds"))
+sample_100 <- readRDS(file.path(data_dir, "sample_100_studies.rds"))
 
-cat("Available datasets:\n")
-cat("  Full corpus:", nrow(readRDS(file.path(data_dir, "fusarium_studies_extraction_ready.rds"))), "studies\n")
-cat("  Ecophysiology subset:", nrow(ecophys_data), "studies\n")
-cat("  Test sample (10):", nrow(readRDS(file.path(data_dir, "sample_10_studies.rds"))), "studies\n")
-cat("  Test sample (50):", nrow(readRDS(file.path(data_dir, "sample_50_studies.rds"))), "studies\n")
-cat("  Test sample (100):", nrow(readRDS(file.path(data_dir, "sample_100_studies.rds"))), "studies\n")
-cat("\nRecommended extraction workflow:\n")
-cat("  1. Test on 10 studies first\n")
-cat("  2. Refine prompts and validate\n")
-cat("  3. Scale to 50 studies\n")
-cat("  4. Run full ecophysiology subset\n")
+tibble(
+  Dataset = c("Full corpus", "Ecophysiology subset", "Sample (10)", "Sample (50)", "Sample (100)"),
+  Studies = c(
+    nrow(full_corpus),
+    nrow(ecophys_data),
+    nrow(sample_10),
+    nrow(sample_50),
+    nrow(sample_100)
+  )
+) %>% kable()
 ```
-
-**Result**: Multiple test samples available for iterative extraction development.
 
 ## Next Steps
 
-1. ✓ Created stratified test samples
-2. Next: Design extraction schema in `0300_design_extraction_schema.Rmd`
+Proceed to `0300_design_extraction_schema.Rmd` to design the extraction schema.
