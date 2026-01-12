@@ -21,10 +21,25 @@ load_config <- function() {
 #' @param text Character vector of text to clean
 #' @return Cleaned text
 clean_text <- function(text) {
+  
   text %>%
     stringr::str_trim() %>%
     stringr::str_squish() %>%
-    stringr::str_remove_all("[\\r\\n]+")
+    stringr::str_replace_all("[\\r\\n]+", " ")
+}
+
+#' Safe Text
+#'
+#' Converts NA or zero-length text to an empty string.
+#'
+#' @param x A text field (may contain NA or character(0))
+#' @return A safe character string
+safe_text <- function(x) {
+  if(is.null(x) || length(x) == 0 || all(is.na(x))) return("NA_character_")
+  if (is.list(x)) x <- unlist(x)
+  if (length(x) == 0) return(NA_character_) 
+  x <- as.character(x)
+  paste(as.character(x), collapse = "; ")
 }
 
 #' Save Results

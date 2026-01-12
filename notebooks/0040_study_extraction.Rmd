@@ -1,0 +1,346 @@
+---
+title: "Study Extraction"
+output: html_notebook
+---
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "C:/Users/vt338/OneDrive - University of Exeter/FHB Meta-Analysis/2025_fhb_llm_extraction")
+```
+
+#Collecting Studies for Meta-Analysis 
+This notebook outlines how to extract studies from public libraries, thus creating a data set to analyse for a meta-analysis.The notebook will use these two databases: 
+- PubMed 
+- Scopus 
+
+Sections will show how to extract from R with this structure:
+- 1. Write Query 
+- 2. Check the effectiveness of the query 
+- 3. Download the collection of document metadata 
+- 4. Convert the download object into a "readable" and "usable" format
+
+##API-Key Set-Up 
+Set-up PubMed & Scopus API-Keys to begin extraction.
+
+**If you don't have an API key for the databases please follow these
+instructions:**
+
+PubMed: 
+- Make an NCBI account:<https://www.ncbi.nlm.nih.gov/account/>
+- Access "account settings page" giving you the option to make an API key: <https://www.ncbi.nlm.nih.gov/account/settings/>. 
+- Add the key to the .env file as PUB_MED_API_KEY= "your_key"
+
+Scopus: 
+- Go to <https://dev.elsevier.com/> and click "I want API Key" - Name and agree to the T&C (Make sure you have access through an institution) 
+- Add the key to the .env file as SCOPUS_API_KEY= "your_key"
+
+```{r}
+# Load environment variables from .env file
+if (file.exists(".env")) {
+  readRenviron(".env")
+  cat("✓ Loaded .env file\n")
+} else {
+  cat("⚠ No .env file found\n")
+  cat("  Create .env with: PUB_MED_API_KEY=your_key\n")
+}
+
+# Check API key status
+api_key_set_PUB <- nchar(Sys.getenv("PUB_MED_API_KEY")) > 0
+cat("Pub Med API key status:", ifelse(api_key_set_PUB, "✓ SET", "✗ NOT SET"), "\n")
+
+api_key_set_SCOPUS <- nchar(Sys.getenv("SCOPUS_API_KEY")) > 0
+cat("Scopus API key status:", ifelse(api_key_set_SCOPUS, "✓ SET", "✗ NOT SET"), "\n")
+
+if (!api_key_set_PUB) {
+  stop("PUB_MED_API_KEY not set. See above guide for setup instructions.")
+}
+
+if (!api_key_set_SCOPUS) {
+  stop("PUB_MED_API_KEY not set. See above guide for setup instructions.")
+}
+  
+```
+##Install Required Packages
+```{r package-list}
+install.packages("pubmedR")
+install.packages("devtools")
+install.packages("rscopus")
+install.packages("httr2")
+install.packages("magrittr")
+install.packages("purrr")
+install.packages("tibble")
+install.packages("cli")
+install.packages("jsonlite")
+install.packages("bibliometrix")
+```
+
+##Load Required Packages
+```{r library}
+library(pubmedR)
+library(rscopus)
+library(httr2)
+library(dotenv)
+library(magrittr)
+library(purrr)
+library(tibble)
+library(dplyr)
+library(cli)
+library(jsonlite)
+library(bibliometrix)
+```
+#PubMed Extraction 
+Using this pubmedR pacakge
+##Query Write-Up 
+Creating a query that will be used to extract studies.
+
+Here are the following query syntax for PubMed:
+- "" - forces the search to extract an exact phrase 
+- \* - any ending of the word is allowed (Ex.model, modelling, models etc.) 
+- [] - specifies where to search (Ex.[Title/Abstract] = search only title & abstract) 
+- Boolean Operators -AND = both conditions must be present, OR = either one or both, NOT =
+excludes 
+- () - groups search terms together
+
+Structure of Query: 
+- Disease Name 
+- Species of Pathogens 
+- Host Type 
+- Climate Factors 
+- Output of research (Ex. Infection, Mycotoxin Production etc.)
+
+\*\*Make sure you use Boolean operators to narrow and broaden your
+search. It will be the best way to ensure you are getting sufficient studies.
+```{r}
+query <- '
+("fusarium head blight"[Title/Abstract] OR FHB[Title/Abstract] OR "wheat scab"[Title/Abstract] OR "ear blight"[Title/Abstract])
+AND
+(Fusarium[MeSH Terms] OR Fusarium[Title/Abstract] OR "Fusarium spp"[Title/Abstract] OR "Fusarium graminearum"[Title/Abstract] OR "Fusarium culmorum"[Title/Abstract] OR "Fusarium poae"[Title/Abstract] OR "Fusarium avenaceum"[Title/Abstract] OR "Fusarium temperatum"[Title/Abstract] OR "Fusarium equiseti"[Title/Abstract] OR "Fusarium langsethiae"[Title/Abstract] OR "Fusarium sporotrichioides"[Title/Abstract] OR "Fusarium tricinctum"[Title/Abstract] OR "Fusarium proliferatum"[Title/Abstract])
+AND
+("Cereals"[MeSH Terms] OR cereal*[Title/Abstract] OR wheat[Title/Abstract] OR barley[Title/Abstract] OR oat*[Title/Abstract] OR rye[Title/Abstract] OR maize[Title/Abstract] OR corn[Title/Abstract] OR rice[Title/Abstract] OR sorghum[Title/Abstract])
+AND
+("Environment"[MeSH Terms] OR "Climate Change"[MeSH Terms] OR climate[Title/Abstract] OR temperature[Title/Abstract] OR "heat stress"[Title/Abstract] OR humidity[Title/Abstract] OR "relative humidity"[Title/Abstract] OR rainfall[Title/Abstract] OR precipitation[Title/Abstract] OR drought[Title/Abstract] OR moisture[Title/Abstract] OR "water stress"[Title/Abstract] OR "water activity"[Title/Abstract] OR CO2[Title/Abstract] OR "solar radiation"[Title/Abstract] OR photoperiod[Title/Abstract] OR salinity[Title/Abstract] OR microclimate[Title/Abstract] OR "pH"[Title/Abstract] OR "soil nutrients"[Title/Abstract] OR "abiotic stress"[Title/Abstract])
+AND
+(model*[Title/Abstract] OR predict*[Title/Abstract] OR forecast*[Title/Abstract] OR "risk model"[Title/Abstract] OR "process-based"[Title/Abstract] OR "mechanistic"[Title/Abstract] OR ecology[Title/Abstract] OR epidemiology[Title/Abstract] OR virulence[Title/Abstract] OR pathogenicity[Title/Abstract] OR infection[Title/Abstract] OR sporulation[Title/Abstract] OR colonization[Title/Abstract] OR "mycotoxin production"[Title/Abstract] OR mycotoxin*[Title/Abstract] OR deoxynivalenol[Title/Abstract] OR DON[Title/Abstract] OR nivanelol[Title/Abstract] OR zearalenone[Title/Abstract] OR enniatin*[Title/Abstract] OR beauvericin[Title/Abstract] OR "T-2"[Title/Abstract] OR "HT-2"[Title/Abstract] OR "emerging mycotoxin"[Title/Abstract])
+AND 
+Journal Article[PT]
+'
+
+cat("✓ Loaded",  "PubMed query\n")
+
+```
+##Effectivness of Search 
+Check if it works in extracting the studies.
+
+Checklist: 
+- Total of Studies 
+- Query Input 
+- Web History
+
+###Functions
+
+pmQueryTotalCount is a function that creates a list of data which include:
+-$total_count = Number of Studies
+-$query_translation = Checks the Query Inputed
+-$web_histroy = Confirms Search History
+
+```{r}
+eff <- pmQueryTotalCount(query = query,  api_key=Sys.getenv("PUB_MED_API_KEY"))
+
+eff$total_count # Checks the number of studies extracted
+
+eff$query_translation # Checks if the query used in the search (this is to check if your full query was used)
+
+eff$web_history # Confirms the search history and gives an ID #
+```
+
+##Downloading PubMed Data
+Collect the studies into a dataframe and donwload for analysis.
+
+###Functions
+
+pmApiRequest = a function that stores the studies identified from the search into a list with the previous details (Ex. Total Count)
+
+pmApi2df = a function the converts the list created previously into a dataframe
+```{r}
+docu <- pmApiRequest(query = query, limit = eff$total_count, api_key = NULL) # download the collection
+
+meta_pub <- pmApi2df(docu) #convert it into a data frame
+
+str(meta_pub)
+
+name(meta_pub) # columns are hard to understand
+```
+##Cleaning and Creating CSV File
+The data frame needs to be cleaned and altered for analysis
+- Rename the column names 
+- Combine the all keywords into one column
+- Remove the three columns used
+```{r}
+raw_meta_pub <- meta_pub %>% #renaming the columns
+  rename(
+    authors           = AU,
+    authorfull        = AF,
+    title             = TI,
+    SourceTitle       = SO,
+    SourceCountry     = SO_CO,
+    language          = LA,
+    DocumentType      = DT,
+    AuthorKeywords    = DE,
+    KeywordsPlus      = ID,
+    MeSH              = MESH,
+    abstract          = AB,
+    AuthorAffiliation = C1,
+    references        = CR,
+    TimesCited        = TC,
+    ISSN              = SN,
+    JournalAbbrev     = J9,
+    JournalISO        = JI,
+    year              = PY,
+    YearSecondary     = PY_IS,
+    volume            = VL,
+    doi               = DI,
+    pages             = PG,
+    GrantID           = GRANT_ID,
+    GrantOrg          = GRANT_ORG,
+    UT                = UT,
+    PMID              = PMID,
+    Database          = DB,
+    AuthorAffilUN     = AU_UN,
+    AuthorCountry     = AU_CO,
+    FirstAuthorCountry = AU1_CO
+  )
+raw_meta_pub$key <- paste(raw_meta_pub$AuthorKeywords,
+                            raw_meta_pub$KeywordsPlus,
+                            raw_meta_pub$MeSH,
+                            sep = "; ") 
+
+raw_meta_pub <- subset(raw_meta_pub, select = -c(AuthorKeywords, KeywordsPlus, MeSH))
+
+```
+
+```{r}
+write.csv(raw_meta_pub, "C:/Users/vt338/OneDrive - University of Exeter/FHB Meta-Analysis/2025_fhb_llm_extraction/data/fusarium/raw_meta_pub.csv", row.names = FALSE) #save the file in data folder
+```
+
+##Scopus Extraction
+Using rscopus package
+##Structure 
+- 1. Write Query 
+- 2. Check the effectiveness of the query 
+- 3. Download the collection of document metadata 
+- 4. Convert the download object into a "readable" and "usable" format
+
+##Query Write-Up 
+Creating a query that will be used to extract studies.
+
+Here are the following query syntax for Scopus: 
+- "" - used for phrases 
+- \* - any ending of the word is allowed (Ex. model, modelling, models etc.)
+- () - grouping statements to be searched (Ex. TITLE-ABS-KEY(termA OR termB)) 
+- Boolean Operators - AND = both conditions must be present, OR = either one or both, NOT = excludes. OR statements need to be inside the parenthesis of the statement
+
+Structure of Query: 
+- Disease Name 
+- Species of Pathogens 
+- Host Type 
+- Climate Factors 
+- Output of research (Ex. Infection, Mycotoxin Production etc.)
+
+\*\*Make sure you use Boolean operators to narrow and broaden your
+search. It will be the best way to ensure you are getting sufficient
+studies.
+
+```{r}
+query_scopus <- '(TITLE-ABS-KEY("fusarium head blight") OR TITLE-ABS-KEY(FHB) OR TITLE-ABS-KEY("wheat scab") OR TITLE-ABS-KEY("ear blight"))
+AND
+(TITLE-ABS-KEY(Fusarium) OR TITLE-ABS-KEY("Fusarium spp") OR TITLE-ABS-KEY("Fusarium graminearum") OR TITLE-ABS-KEY("Fusarium culmorum") OR TITLE-ABS-KEY("Fusarium poae") OR TITLE-ABS-KEY("Fusarium avenaceum") OR TITLE-ABS-KEY("Fusarium temperatum") OR TITLE-ABS-KEY("Fusarium equiseti") OR TITLE-ABS-KEY("Fusarium langsethiae") OR TITLE-ABS-KEY("Fusarium sporotrichioides") OR TITLE-ABS-KEY("Fusarium tricinctum") OR TITLE-ABS-KEY("Fusarium proliferatum"))
+AND
+(TITLE-ABS-KEY(cereal*) OR TITLE-ABS-KEY(wheat) OR TITLE-ABS-KEY(barley) OR TITLE-ABS-KEY(oat*) OR TITLE-ABS-KEY(rye) OR TITLE-ABS-KEY(maize) OR TITLE-ABS-KEY(corn) OR TITLE-ABS-KEY(rice) OR TITLE-ABS-KEY(sorghum))
+AND
+(TITLE-ABS-KEY(climate) OR TITLE-ABS-KEY("climate change") OR TITLE-ABS-KEY(temperature) OR TITLE-ABS-KEY("heat stress") OR TITLE-ABS-KEY(humidity) OR TITLE-ABS-KEY("relative humidity") OR TITLE-ABS-KEY(rainfall) OR TITLE-ABS-KEY(precipitation) OR TITLE-ABS-KEY(drought) OR TITLE-ABS-KEY(moisture) OR TITLE-ABS-KEY("water stress") OR TITLE-ABS-KEY("water activity") OR TITLE-ABS-KEY(CO2) OR TITLE-ABS-KEY("solar radiation") OR TITLE-ABS-KEY(photoperiod) OR TITLE-ABS-KEY(salinity) OR TITLE-ABS-KEY(microclimate) OR TITLE-ABS-KEY(pH) OR TITLE-ABS-KEY("soil nutrients") OR TITLE-ABS-KEY("abiotic stress"))
+AND
+(TITLE-ABS-KEY(model*) OR TITLE-ABS-KEY(predict*) OR TITLE-ABS-KEY(forecast*) OR TITLE-ABS-KEY("risk model") OR TITLE-ABS-KEY("process-based") OR TITLE-ABS-KEY(mechanistic) OR TITLE-ABS-KEY(ecology) OR TITLE-ABS-KEY(epidemiology) OR TITLE-ABS-KEY(virulence) OR TITLE-ABS-KEY(pathogenicity) OR TITLE-ABS-KEY(infection) OR TITLE-ABS-KEY(sporulation) OR TITLE-ABS-KEY(colonization) OR TITLE-ABS-KEY("mycotoxin production") OR TITLE-ABS-KEY(mycotoxin*) OR TITLE-ABS-KEY(deoxynivalenol) OR TITLE-ABS-KEY(DON) OR TITLE-ABS-KEY(nivalenol) OR TITLE-ABS-KEY(zearalenone) OR TITLE-ABS-KEY(enniatin*) OR TITLE-ABS-KEY(beauvericin) OR TITLE-ABS-KEY("T-2") OR TITLE-ABS-KEY("HT-2") OR TITLE-ABS-KEY("emerging mycotoxin"))
+AND DOCTYPE(ar)'
+
+cat("✓ Scopus query ready\n")
+
+```
+
+##Extraction & Effectivness of Search
+Once you've created your query, start extraction. During the extraction process, the total study count and query inputed will be shown.
+
+Scopus search is more complicated as there are no packages that efficiently extract abstracts etc.
+
+###Functions
+
+scopus_search = generates the search with query and creats a list
+- entries = all studies extracted
+- total_results = amount of studies extracted
+- get_statements = evidence of web history
+
+gen_entries_to_df = generates a list with all metadata
+- df = main metadata (title, abstract etc.)
+- affiliation = information on the creation of the study (country, institution etc.)
+- author = full detail on author information
+```{r}
+#Set API key manually
+api_key <- Sys.getenv("SCOPUS_API_KEY")
+rscopus::set_api_key(api_key) # Need to manual register API into the package
+
+res <- rscopus::scopus_search(query_scopus, view = "COMPLETE") 
+
+#Check number of studies extracted
+total_studies <- res$total_results
+total_studies
+```
+##Downloading Scopus Data
+Collect the studies into a dataframe and donwload for analysis.
+
+###Functions
+gen_entries_to_df = generates a list with all metadata
+- df = main metadata (title, abstract etc.)
+- affiliation = information on the creation of the study (country, institution etc.)
+- author = full detail on author information
+```{r}
+#Save studies extracted into a dataframe
+dfs <- rscopus::gen_entries_to_df(res$entries)
+
+meta_scopus<- dfs$df
+```
+##Cleaning and Creating CSV File
+The data frame needs to be cleaned and altered for analysis
+- Rename the column names 
+```{r}
+str(meta_scopus)
+names(meta_scopus)
+
+raw_meta_scopus <- meta_scopus %>%   # <-- your raw scopus dataframe
+  rename(
+    ID              = eid,
+    title           = `dc:title`,
+    authors          = `dc:creator`,
+    abstract        = `dc:description`,
+    doi             = `prism:doi`,
+    journal         = `prism:publicationName`,
+    volume          = `prism:volume`,
+    issue           = `prism:issueIdentifier`,
+    pages           = `prism:pageRange`,
+    year            = `prism:coverDate`,
+    url             = `prism:url`,
+    identifier      = `dc:identifier`,
+    PubMedID        = `pubmed-id`,
+    keywords        = authkeywords,
+    citations       = `citedby-count`,
+    ISSN            = `prism:issn`,
+    EISSN           = `prism:eIssn`,
+    AggregationType = `prism:aggregationType`,
+    ArticleType     = subtypeDescription,
+    FundingAgency   = `fund-sponsor`,
+    FundingID       = `fund-no`,
+    FundingAcronym  = `fund-acr`,
+    OpenAccess      = openaccessFlag
+  )
+```
+```{r}
+write.csv(raw_meta_scopus, "C:/Users/vt338/OneDrive - University of Exeter/FHB Meta-Analysis/2025_fhb_llm_extraction/data/fusarium/raw_meta_scopus.csv", row.names = FALSE) #save the file in data folder
+```
+
+

@@ -97,11 +97,20 @@ tibble(
 
 ```{r year-distribution, fig.width=10, fig.height=5}
 year_counts <- fusarium_data %>%
+<<<<<<< HEAD
+  count(pub_year, sort = TRUE)
+
+print(year_counts)
+
+# Plot
+ggplot(year_counts, aes(x = pub_year, y = n)) +
+=======
   filter(!is.na(year)) %>%
   count(year, name = "n_studies") %>%
   arrange(year)
 
 ggplot(year_counts, aes(x = year, y = n_studies)) +
+>>>>>>> origin/main
   geom_col(fill = "steelblue") +
   geom_text(aes(label = n_studies), vjust = -0.5, size = 3) +
   scale_x_continuous(breaks = seq(min(year_counts$year), max(year_counts$year), by = 2)) +
@@ -129,11 +138,21 @@ year_counts %>%
 
 ```{r database-distribution, fig.width=8, fig.height=4}
 database_counts <- fusarium_data %>%
+<<<<<<< HEAD
+  count(source, sort = TRUE) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+print(database_counts)
+
+# Plot
+ggplot(database_counts, aes(x = reorder(source, -n), y = n)) +
+=======
   count(database, name = "n_studies") %>%
   mutate(percentage = round(n_studies / sum(n_studies) * 100, 1)) %>%
   arrange(desc(n_studies))
 
 ggplot(database_counts, aes(x = reorder(database, -n_studies), y = n_studies)) +
+>>>>>>> origin/main
   geom_col(fill = "darkgreen") +
   geom_text(aes(label = paste0(n_studies, " (", percentage, "%)")),
             vjust = -0.5, size = 4) +

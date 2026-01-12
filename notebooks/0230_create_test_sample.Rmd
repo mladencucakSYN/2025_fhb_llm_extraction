@@ -49,12 +49,18 @@ sample_info <- tibble(
 for (size in sample_sizes) {
   sample_data <- shuffled_data %>%
     group_by(topic) %>%
+<<<<<<< HEAD
+    slice_sample(n = min(ceiling(size/6), nrow(.))) %>%  # Proportional sampling
+    ungroup() %>%
+    slice_sample(n = min(size, nrow(.)))  # Limit to target size
+=======
     slice_head(n = ceiling(size / n_distinct(ecophys_data$topic))) %>%
     ungroup()
 
   if (nrow(sample_data) > size) {
     sample_data <- sample_data[1:size, ]
   }
+>>>>>>> origin/main
 
   sample_file <- file.path(data_dir, sprintf("sample_%d_studies.rds", size))
   saveRDS(sample_data, sample_file)

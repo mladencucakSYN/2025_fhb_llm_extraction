@@ -13,15 +13,28 @@
 #' @param cache_dir Cache directory path (default: "data/cache")
 #' @export
 cache_extraction <- function(doc_id, result, cache_dir = "data/cache") {
+  id <- as.character(doc_id)
   # Create cache directory if it doesn't exist
   dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
-
+  
+  # Collapse list fields into strings
+  result_df <- tibble::tibble(
+    id = id,
+    fusarium_species       = safe_text(result$fusarium_species),
+    crop                   = safe_text(result$crop),
+    abiotic_factors        = safe_text(result$abiotic_factors),
+    observed_effects       = safe_text(result$observed_effects),
+    agronomic_practices    = safe_text(result$agronomic_practices),
+    modeling               = as.logical(result$modeling),
+    summary                = as.character(result$summary)
+  )
+  
   # Create safe filename from document ID
   safe_id <- gsub("[^a-zA-Z0-9_-]", "_", as.character(doc_id))
   cache_file <- file.path(cache_dir, paste0(safe_id, ".rds"))
 
   # Save result
-  saveRDS(result, cache_file)
+  saveRDS(result_df, cache_file)
 
   invisible(cache_file)
 }

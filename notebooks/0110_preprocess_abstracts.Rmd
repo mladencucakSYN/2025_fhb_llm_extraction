@@ -61,10 +61,18 @@ text_issues %>% kable()
 
 ```{r clean-function}
 clean_abstract_text <- function(text) {
+<<<<<<< HEAD
+ text <- ifelse(is.na(text), "", text)
+
+  
+  text %>%
+    # Remove newlines and tabs
+=======
   result <- text
   result <- ifelse(is.na(result) | nchar(result) == 0, "", result)
 
   result <- result %>%
+>>>>>>> origin/main
     str_replace_all("[\r\n\t]+", " ") %>%
     str_replace_all("\\s+", " ") %>%
     str_trim() %>%

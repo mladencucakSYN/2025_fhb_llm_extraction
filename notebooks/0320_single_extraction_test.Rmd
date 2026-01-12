@@ -41,8 +41,12 @@ tibble(
 result <- extract_fusarium_gemini(
   abstract = test_study$abstract_clean,
   title = test_study$title,
+<<<<<<< HEAD
+  keywords = safe_text(test_study$keywords_clean)
+=======
   keywords = test_study$keywords_clean,
   model = GEMINI_MODEL
+>>>>>>> origin/main
 )
 ```
 

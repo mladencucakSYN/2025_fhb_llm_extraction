@@ -33,7 +33,7 @@ library(purrr)
 scopus_search <- function(query,
                           count = 200,
                           api_key = Sys.getenv("SCOPUS_API_KEY"),
-                          view = "STANDARD",
+                          view = "COMPLETE",
                           start = 0) {
 
   if (nchar(api_key) == 0) {
@@ -132,7 +132,7 @@ parse_scopus_entries <- function(entries) {
   # Build standardized data frame
   articles <- tibble(
     scopus_id = safe_extract("dc:identifier"),
-    eid = safe_extract("eid"),
+    id = safe_extract("eid"),
     doi = safe_extract("prism:doi"),
     title = safe_extract("dc:title"),
     abstract = safe_extract("dc:description"),
@@ -183,7 +183,7 @@ scopus_search_all <- function(query,
 
   all_articles <- list()
   current_start <- 0
-  count_per_request <- 25  # STANDARD view limit
+  count_per_request <- 25  # Scopus maximum
 
   # Calculate number of requests needed
   n_requests <- ceiling(max_results / count_per_request)

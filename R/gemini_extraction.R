@@ -42,6 +42,11 @@ extract_fusarium_gemini <- function(abstract,
     if (nchar(abstract) > 0) paste("Abstract:", abstract) else "",
     sep = "\n\n"
   )
+  
+  collapse_field <- function(x) {
+    if (is.null(x) || length(x) == 0) return("")
+    paste(unlist(x), collapse = "; ")
+  }
 
   # Build extraction prompt
   prompt <- sprintf('
@@ -82,6 +87,43 @@ Do not include any text before or after the JSON.
 
   response <- chat$chat(prompt)
 
+<<<<<<< HEAD
+  clean_json <- function(txt) {
+    txt <- gsub("```json", "", txt)
+    txt <- gsub("```", "", txt)
+    txt <- trimws(txt)
+    
+    # extract JSON object between first "{" and last "}"
+    start <- regexpr("\\{", txt)
+    end <- regexpr("\\}[[:space:]]*$", txt)
+    
+    if (start == -1 || end == -1) return(txt)
+    
+    substring(txt, start, end)
+  }
+    
+  # Parse JSON response
+    parsed <- tryCatch({
+      cleaned <- clean_json(response)
+      jsonlite::fromJSON(cleaned, simplifyVector = FALSE)
+    }, error = function(e) {
+      warning(sprintf("Failed to parse JSON response: %s", conditionMessage(e)))
+      warning(sprintf("Raw response: %s", substr(response, 1, 500)))
+      
+      list(
+        fusarium_species = list(),
+        crop = list(),
+        abiotic_factors = list(),
+        observed_effects = list(),
+        agronomic_practices = list(),
+        modeling = FALSE,
+        summary = "Error parsing response",
+        raw_response = response
+      )
+    })
+    
+    parsed
+=======
   # Clean response - remove markdown code fences if present
   clean_response <- response
   clean_response <- gsub("^```json\\s*", "", clean_response)
@@ -108,8 +150,9 @@ Do not include any text before or after the JSON.
   })
 
   parsed
+>>>>>>> origin/main
 }
-
+  
 
 #' Extract Generic Scientific Information
 #'

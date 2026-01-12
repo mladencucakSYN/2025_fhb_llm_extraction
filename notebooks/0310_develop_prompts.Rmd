@@ -40,6 +40,13 @@ build_extraction_prompt <- function(title, abstract, keywords = "") {
   abstract <- if (is.null(abstract) || is.na(abstract)) "" else as.character(abstract)
   keywords <- if (is.null(keywords) || is.na(keywords)) "" else as.character(keywords)
 
+<<<<<<< HEAD
+  if (length(title) == 0 || is.na(title))       title    <- ""
+  if (length(abstract) == 0 || is.na(abstract)) abstract <- ""
+  if (length(keywords) == 0 || is.na(keywords)) keywords <- ""
+  # Combine text
+=======
+>>>>>>> origin/main
   full_text <- paste(
     if (nchar(title) > 0) paste("Title:", title) else "",
     if (nchar(abstract) > 0) paste("Abstract:", abstract) else "",
@@ -106,8 +113,17 @@ prompt <- build_extraction_prompt(
 
 response <- simple_gemini(prompt)
 
+<<<<<<< HEAD
+cat("\nResponse:\n")
+cat(response, "\n")
+
+# Try to parse JSON
+cleaned <- gsub("```|json", "", response)
+
+=======
+>>>>>>> origin/main
 parsed <- tryCatch({
-  fromJSON(response)
+  fromJSON(cleaned)
 }, error = function(e) {
   NULL
 })
@@ -141,9 +157,10 @@ for (i in 1:min(5, nrow(sample_10))) {
     keywords = sample_10$keywords_clean[i]
   )
 
+  cleaned <- gsub("```|json", "", response)
   result <- tryCatch({
     response <- simple_gemini(prompt)
-    parsed <- fromJSON(response)
+    parsed <- fromJSON(cleaned)
     parsed$id <- sample_10$id[i]
     results[[i]] <- parsed
 

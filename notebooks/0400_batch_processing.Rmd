@@ -20,6 +20,7 @@ library(dplyr)
 source("../R/gemini_extraction.R")
 source("../R/retry_logic.R")
 source("../R/batch_processor.R")
+source("../R/utils.R")
 
 # Model configuration - change here to switch models
 # Options: "gemini-2.5-flash-lite" (fast), "gemini-2.5-pro" (better quality)
@@ -44,10 +45,16 @@ extract_one_study <- function(study_row) {
   result <- tryCatch({
     retry_with_backoff({
       extract_fusarium_gemini(
+<<<<<<< HEAD
+        abstract = safe_text(study_row$abstract_clean),
+        title = safe_text(study_row$title),
+        keywords = safe_text(study_row$keywords_clean)
+=======
         abstract = study_row$abstract_clean,
         title = study_row$title,
         keywords = study_row$keywords_clean,
         model = GEMINI_MODEL
+>>>>>>> origin/main
       )
     }, max_attempts = 3, base_delay = 2)
   }, error = function(e) {
@@ -55,6 +62,7 @@ extract_one_study <- function(study_row) {
   })
 
   if (!is.null(result)) {
+    result <- lapply(result, safe_text)
     result$id <- study_row$id
     as.data.frame(result, stringsAsFactors = FALSE)
   } else {

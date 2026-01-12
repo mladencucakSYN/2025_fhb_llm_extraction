@@ -1,0 +1,8 @@
+total_records: 1544
+date_loaded: 20430.0
+year_range:
+- .inf
+- -.inf
+databases: ~
+missing_abstracts: 7
+mean_abstract_length: 1689.2439818

@@ -385,6 +385,7 @@ parse_pubmed_article <- function(article) {
 #' }
 fetch_fusarium_pubmed <- function(query = NULL,
                                    retmax = 1000,
+                                   retstart = 0,
                                    api_key = Sys.getenv("PUB_MED_API_KEY")) {
 
   # Default Fusarium ecophysiology query
@@ -404,7 +405,7 @@ fetch_fusarium_pubmed <- function(query = NULL,
   message("")
 
   # Search
-  pmids <- pubmed_search(query, retmax = retmax, api_key = api_key)
+  pmids <- pubmed_search(query, retmax = retmax, retstart = retstart, api_key = api_key)
 
   if (length(pmids) == 0) {
     message("No articles found")

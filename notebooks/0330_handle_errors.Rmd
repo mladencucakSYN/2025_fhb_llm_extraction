@@ -19,6 +19,7 @@ library(dplyr)
 
 source("../R/gemini_extraction.R")
 source("../R/retry_logic.R")
+source("../R/utils.R")
 
 data_dir <- "../data/fusarium"
 sample_10 <- readRDS(file.path(data_dir, "sample_10_studies.rds"))
@@ -38,7 +39,7 @@ result <- retry_with_backoff({
   extract_fusarium_gemini(
     abstract = test_study$abstract_clean,
     title = test_study$title,
-    keywords = test_study$keywords_clean
+    keywords = safe_text(test_study$keywords_clean)
   )
 }, max_attempts = 3, base_delay = 2)
 
@@ -63,7 +64,7 @@ extract_fusarium_safe <- function(study, max_attempts = 3) {
       extract_fusarium_gemini(
         abstract = study$abstract_clean,
         title = study$title,
-        keywords = study$keywords_clean
+        keywords = safe_text(study$keywords_clean)
       )
     }, max_attempts = max_attempts, base_delay = 2)
   }, error = function(e) {

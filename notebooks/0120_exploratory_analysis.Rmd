@@ -41,12 +41,26 @@ tibble(
 
 ```{r temporal-trends, fig.width=10, fig.height=5}
 temporal_summary <- valid_data %>%
+<<<<<<< HEAD
+  count(pub_year, sort = TRUE) %>%
+  mutate(
+    cumulative = cumsum(n),
+    pct_total = cumulative / sum(n) * 100
+  )
+
+print(head(temporal_summary, 10))
+
+# Plot publication trend
+ggplot(temporal_summary, aes(x = pub_year, y = n)) +
+  geom_line(color = "steelblue", size = 1) +
+=======
   count(year, name = "n_studies") %>%
   arrange(year) %>%
   mutate(cumulative = cumsum(n_studies))
 
 ggplot(temporal_summary, aes(x = year, y = n_studies)) +
   geom_line(color = "steelblue", linewidth = 1) +
+>>>>>>> origin/main
   geom_point(color = "steelblue", size = 2) +
   geom_smooth(method = "loess", se = TRUE, color = "red", linetype = "dashed") +
   labs(
@@ -120,6 +134,39 @@ word_freq %>% head(30) %>% kable()
 
 ## Fusarium Species Analysis
 
+<<<<<<< HEAD
+## Fusarium Species Mentions
+
+Identify which Fusarium species are most frequently studied.
+
+```{r fusarium-species}
+cat("\nFusarium Species Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+# Common Fusarium species patterns
+species_patterns <- c(
+  "F\\. graminearum|Fusarium graminearum",
+  "F\\. culmorum|Fusarium culmorum",
+  "F\\. avenaceum|Fusarium avenaceum",
+  "F\\. equiseti|Fusarium equiseti",
+  "F\\. temperatum|Fusarium temperatum",
+  "F\\. poae|Fusarium poae",
+  "F\\. sporotrichioides|Fusarium sporotrichioides",
+  "F\\. verticillioides|Fusarium verticillioides",
+  "F\\. proliferatum|Fusarium proliferatum"
+)
+
+species_names <- c(
+  "F. graminearum",
+  "F. culmorum",
+  "F. avenaceum",
+  "F. equiseti",
+  "F. temperatum",
+  "F. poae",
+  "F. sporotrichioides",
+  "F. verticillioides",
+  "F. proliferatum"
+=======
 ```{r fusarium-species, fig.width=10, fig.height=5}
 species_patterns <- list(
   "F. graminearum" = "F\\. graminearum|Fusarium graminearum",
@@ -129,6 +176,7 @@ species_patterns <- list(
   "F. sporotrichioides" = "F\\. sporotrichioides|Fusarium sporotrichioides",
   "F. verticillioides" = "F\\. verticillioides|Fusarium verticillioides",
   "F. proliferatum" = "F\\. proliferatum|Fusarium proliferatum"
+>>>>>>> origin/main
 )
 
 species_counts <- tibble(
@@ -184,6 +232,27 @@ crop_counts %>% kable()
 
 ## Climate/Environmental Factors
 
+<<<<<<< HEAD
+## Climate-Related Terms
+
+Analyze mentions of climate and environmental factors.
+
+```{r climate-terms}
+cat("\nClimate/Environmental Factor Analysis:\n")
+cat(rep("-", 50), "\n", sep = "")
+
+climate_patterns <- c(
+  "temperature" = "\\btemperature",
+  "moisture" = "\\bmoisture",
+  "humidity" = "\\bhumidity",
+  "rainfall|precipitation" = "\\brainfall|\\bprecipitation",
+  "drought" = "\\bdrought",
+  "climate change" = "\\bclimate change",
+  "water stress" = "\\bwater stress",
+  "heat stress" = "\\bheat stress",
+  "carbon dioxide|CO2" = "\\bcarbon dioxide|\\bCO2",
+  "light|UV" = "\\blight|\\bUV"
+=======
 ```{r climate-terms, fig.width=10, fig.height=5}
 climate_patterns <- list(
   "Temperature" = "\\btemperature",
@@ -194,6 +263,7 @@ climate_patterns <- list(
   "Climate change" = "\\bclimate change",
   "Water stress" = "\\bwater stress",
   "Heat stress" = "\\bheat stress"
+>>>>>>> origin/main
 )
 
 climate_counts <- tibble(
@@ -222,8 +292,19 @@ toxin_patterns <- list(
   "DON/Deoxynivalenol" = "\\bDON\\b|\\bdeoxynivalenol",
   "Zearalenone/ZEN" = "\\bzearalenone|\\bZEN\\b",
   "T-2 toxin" = "\\bT-2\\b",
+<<<<<<< HEAD
+  "nivalenol|NIV" = "\\bnivalenol|\\bNIV\\b",
+  "NX toxins|NX-2|NX-3" = "\\bNX toxins|bNX-2|bNX-3",
+  "fumonisin" = "\\bfumonisin",
+  "monoacetoxyscripenol|MAS" = "\\bmonoacetoxyscripenol|bMAS",
+  "enniatin|ENN" = "\\benniatin|bENN",
+  "beuavericin|BEA" = "bbeuavericin|bBEA",
+  "moniliformin|MON" = "bmoniliformin|bMON",
+  "fusaproliferin|FUS" = "bfusaproliferin|bFUS"
+=======
   "Nivalenol/NIV" = "\\bnivalenol|\\bNIV\\b",
   "Fumonisin" = "\\bfumonisin"
+>>>>>>> origin/main
 )
 
 toxin_counts <- tibble(

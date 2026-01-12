@@ -54,6 +54,12 @@ tibble(
 Select studies where the dominant topic is in the ecophysiology macro-theme.
 
 ```{r filter-ecophysiology}
+<<<<<<< HEAD
+# Ecophysiology topics: 2, 5, 8, 10, 11, 13
+ecophys_topics <- c(1, 10, 12, 13, 16, 17, 18)
+
+=======
+>>>>>>> origin/main
 ecophys_studies <- topic_assignments %>%
   filter(topic %in% ecophys_topics) %>%
   left_join(topic_labels %>% select(topic, label, macro_theme), by = "topic")
