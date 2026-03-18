@@ -29,7 +29,7 @@ if (api_key_set) {
     }
     
     chat <- ellmer::chat_google_gemini(
-      model = "gemini-2.0-flash-exp",
+      model = "gemini-3-flash-preview",
       api_key = api_key
     )
     

@@ -42,7 +42,7 @@ if (!requireNamespace("ellmer", quietly = TRUE)) {
 }
 
 library(ellmer)
-source("../R/gemini_extraction.R")
+source("R/gemini_extraction.R")
 ```
 
 ## Test 1: Simple Math Question
@@ -184,7 +184,7 @@ test_results %>% kable()
 ```{r api-details}
 tibble::tibble(
   Setting = c("Model", "Package", "API Key Source"),
-  Value = c("gemini-2.0-flash-exp", "ellmer", "GOOGLE_API_KEY env var")
+  Value = c("gemini-3-flash-preview", "ellmer", "GOOGLE_API_KEY env var")
 ) %>% kable()
 ```
 
